@@ -1,0 +1,22 @@
+@PACKAGE_INIT@
+
+# 版本信息
+set(wust_vl_VERSION "@WUST_VL_VERSION@")
+set(wust_vl_VERSION_MAJOR "@WUST_VL_VERSION_MAJOR@")
+set(wust_vl_VERSION_MINOR "@WUST_VL_VERSION_MINOR@")
+set(wust_vl_VERSION_PATCH "@WUST_VL_VERSION_PATCH@")
+
+# 引入安装的目标
+include("${CMAKE_CURRENT_LIST_DIR}/wust_vlTargets.cmake")
+
+# 提供命名空间
+# 使用 wust_vl::ml_net 这样的目标
+if(NOT TARGET wust_vl::ml_net)
+    message(FATAL_ERROR "ml_net target not found in wust_vlConfig.cmake")
+endif()
+
+# 提供 include 目录变量，方便用户 include
+set(WUST_VL_INCLUDE_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../include" CACHE PATH "wust_vl include directory")
+
+# 方便用户用 find_package 后直接 include
+# include_directories(${WUST_VL_INCLUDE_DIRS})

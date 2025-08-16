@@ -1,0 +1,5 @@
+Diagnostics:
+  Suppress:
+    - drv_unknown_argument
+CompileFlags:
+  Remove: [-forward-unknown-to-host-compiler, --generate-code=*, -Xcompiler=*]
