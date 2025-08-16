@@ -96,10 +96,34 @@ make -j "$max_threads"
 
 echo -e "${yellow}\n<<<--- start install --->>>\n${reset}"
 sudo make install
-sudo rm /usr/lib/wust_vl/*
-sudo ln -s /usr/local/lib/wust_vl/* /usr/lib
+# sudo rm /usr/lib/wust_vl/*
+# sudo ln -s /usr/local/lib/wust_vl/* /usr/lib
 
-echo -e "${yellow}\n<<<--- Total Lines --->>>${reset}"
-echo -e "${blue}           $total${reset}"
+echo -e "${yellow}\n<--- Total Lines --->${reset}"
+total=$(find .. \
+    -type d \( \
+        -path ../build -o \
+        -path ../hikSDK -o \
+        -path ../model -o \
+        -path ../3rdparty -o \
+        -path ../.cache \
+    \) -prune -o \
+    -type f \( \
+        -name "*.cpp" -o \
+        -name "*.hpp" -o \
+        -name "*.c" -o \
+        -name "*.h" -o \
+        -name "*.py" -o \
+        -name "*.html" -o \
+        -name "*.sh" -o \
+        -name "*.md" -o \
+        -name "*.yaml" -o \
+        -name "*.json" -o \
+        -name "*.css" -o \
+        -name "*.js" -o \
+        -name "*.cu" -o \
+        -name "*.txt"\
+    \) -exec wc -l {} + | awk 'END{print $1}')
+echo -e "${blue}        $total${reset}"
 
 echo -e "${yellow}\n<<<--- Welcome WUST_VL--->>>\n${reset}"
