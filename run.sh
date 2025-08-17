@@ -96,8 +96,8 @@ make -j "$max_threads"
 
 echo -e "${yellow}\n<<<--- start install --->>>\n${reset}"
 sudo make install
-# sudo rm /usr/lib/wust_vl/*
-# sudo ln -s /usr/local/lib/wust_vl/* /usr/lib
+sudo rm /usr/lib/wust_vl_*
+sudo ln -s /usr/local/lib/wust_vl_* /usr/lib
 
 echo -e "${yellow}\n<--- Total Lines --->${reset}"
 total=$(find .. \

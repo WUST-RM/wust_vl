@@ -1,4 +1,3 @@
-#pragma once
 #include "common/concurrency/adaptive_resource_pool.hpp"
 #include "common/utils/logger.hpp"
 #include "common/utils/timer.hpp"

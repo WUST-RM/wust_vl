@@ -4,5 +4,15 @@ include("${CMAKE_CURRENT_LIST_DIR}/wust_vlTargets.cmake")
 
 
 
-set(WUST_VL_INCLUDE_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../include" CACHE PATH "wust_vl include directory")
-include_directories(${WUST_VL_INCLUDE_DIRS})
+set(
+    WUST_VL_INCLUDE_DIRS
+        "@CMAKE_INSTALL_PREFIX@/include"
+        "@CMAKE_INSTALL_PREFIX@/include/wust_vl"
+)
+
+set(
+    WUST_VL_LIBS
+        wust_vl_ml_net
+        wust_vl_common
+)
+

@@ -1,8 +1,5 @@
 #include "ml_net/tensorrt/tensorrt_net.hpp"
 #include "NvOnnxParser.h"
-#include "fmt/color.h"
-#include "fmt/core.h"
-#include "fmt/printf.h"
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -10,20 +7,10 @@ namespace ml_net {
 #define TRT_ASSERT(expr) \
     do { \
         if (!(expr)) { \
-            fmt::print(fmt::fg(fmt::color::red), "assert fail: '" #expr "'"); \
-            exit(-1); \
+            std::cerr << "\033[31massert fail: '" #expr "'\033[0m" << std::endl; \
+            std::exit(-1); \
         } \
     } while (0)
-#define CUDA_CHECK(call) \
-    do { \
-        cudaError_t err = call; \
-        if (err != cudaSuccess) { \
-            std::cerr << "CUDA error: " << cudaGetErrorString(err) << " at " << __FILE__ << ":" \
-                      << __LINE__ << std::endl; \
-            return nullptr; \
-        } \
-    } while (0)
-
 struct TensorRTNet::Impl {
     Impl() = default;
     ~Impl() {
