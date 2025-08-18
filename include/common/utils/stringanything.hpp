@@ -331,4 +331,4 @@ private:
     std::unordered_map<std::string, Entry> map_;
 };
 
-} // namespace stringanyting
+} // namespace stringanything

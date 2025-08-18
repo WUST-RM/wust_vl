@@ -55,10 +55,12 @@ endif()
 
 add_subdirectory(src/ml_net)
 add_subdirectory(src/common)
+add_subdirectory(src/algorithm)
 set(
         TARGETS_LIST
             wust_vl_ml_net
             wust_vl_common
+            wust_vl_algorithm
 
     )
 install(
