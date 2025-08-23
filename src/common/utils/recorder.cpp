@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "common/drivers/recorder.hpp"
+#include "common/utils/recorder.hpp"
 // std
 #include <filesystem>
 #include <sys/stat.h>

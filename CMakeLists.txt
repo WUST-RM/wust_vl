@@ -27,10 +27,14 @@ configure_file(
 )
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake)
 include_directories(include)
+# OpenCV
 find_package(OpenCV REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
 find_package(Eigen3 REQUIRED)
 find_package(Ceres REQUIRED)
-
+include_directories(${CERES_INCLUDE_DIRS})
+find_package(HikSDK REQUIRED)
+include_directories(${HikSDK_INCLUDE_DIR})
 if(BUILD_WITH_OPENVINO)
     find_package(OpenVINO REQUIRED COMPONENTS Runtime ONNX)
 endif()
@@ -56,11 +60,13 @@ endif()
 add_subdirectory(src/ml_net)
 add_subdirectory(src/common)
 add_subdirectory(src/algorithm)
+add_subdirectory(src/video)
 set(
         TARGETS_LIST
             wust_vl_ml_net
             wust_vl_common
             wust_vl_algorithm
+            wust_vl_video
 
     )
 install(

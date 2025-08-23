@@ -44,61 +44,93 @@ struct TensorRTNet::Impl {
     }
     void buildEngine(const std::string& onnx_path) {
         std::string engine_path = onnx_path.substr(0, onnx_path.find_last_of('.')) + ".engine";
-        std::ifstream engine_file(engine_path, std::ios::binary);
-        if (engine_file.good()) {
-            engine_file.seekg(0, std::ios::end);
-            size_t size = engine_file.tellg();
-            engine_file.seekg(0, std::ios::beg);
-            std::vector<char> engine_data(size);
-            engine_file.read(engine_data.data(), size);
-            engine_file.close();
 
-            runtime_ = nvinfer1::createInferRuntime(g_logger_); // ✅ 作为成员变量保存
-            engine_ = runtime_->deserializeCudaEngine(engine_data.data(), size);
-            if (engine_ != nullptr) {
-                std::cout << "Load engine from " << engine_path << " successfully." << std::endl;
-                return;
+        {
+            std::ifstream engine_file(engine_path, std::ios::binary);
+            if (engine_file.good()) {
+                engine_file.seekg(0, std::ios::end);
+                size_t size = engine_file.tellg();
+                engine_file.seekg(0, std::ios::beg);
+
+                std::vector<char> engine_data(size);
+                engine_file.read(engine_data.data(), size);
+                engine_file.close();
+
+                if (!runtime_) {
+                    runtime_ = nvinfer1::createInferRuntime(g_logger_);
+                }
+
+                engine_ = runtime_->deserializeCudaEngine(engine_data.data(), size);
+                if (engine_) {
+                    std::cout << "Load engine from " << engine_path << " successfully."
+                              << std::endl;
+                    return;
+                }
+                std::cerr << "Warning: Failed to load serialized engine, rebuilding..."
+                          << std::endl;
             }
         }
-        std::cout << "building new engine..." << std::endl;
-        // 构建新引擎
+
+        std::cout << "Building new engine from ONNX..." << std::endl;
         auto builder = nvinfer1::createInferBuilder(g_logger_);
         const auto explicit_batch = 1U
             << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
         auto network = builder->createNetworkV2(explicit_batch);
         auto parser = nvonnxparser::createParser(*network, g_logger_);
-        parser->parseFromFile(
-            onnx_path.c_str(),
-            static_cast<int>(nvinfer1::ILogger::Severity::kINFO)
-        );
+
+        if (!parser->parseFromFile(
+                onnx_path.c_str(),
+                static_cast<int>(nvinfer1::ILogger::Severity::kWARNING)
+            ))
+        {
+            throw std::runtime_error("ERROR: Failed to parse ONNX file: " + onnx_path);
+        }
 
         auto config = builder->createBuilderConfig();
         if (builder->platformHasFastFp16()) {
             config->setFlag(nvinfer1::BuilderFlag::kFP16);
         }
-        engine_ = builder->buildEngineWithConfig(*network, *config);
 
-        // 保存引擎
-        auto serialized_engine = engine_->serialize();
-        std::ofstream out_file(engine_path, std::ios::binary);
-        out_file.write(
-            reinterpret_cast<const char*>(serialized_engine->data()),
-            serialized_engine->size()
-        );
-        out_file.close();
-        serialized_engine->destroy();
+        nvinfer1::ICudaEngine* tmp_engine = builder->buildEngineWithConfig(*network, *config);
+        if (!tmp_engine) {
+            throw std::runtime_error("ERROR: Failed to build engine from ONNX: " + onnx_path);
+        }
 
-        // 反序列化仍然需要 runtime_
+        auto serialized_engine = tmp_engine->serialize();
+        {
+            std::ofstream out_file(engine_path, std::ios::binary);
+            out_file.write(
+                reinterpret_cast<const char*>(serialized_engine->data()),
+                serialized_engine->size()
+            );
+        }
+
         if (!runtime_) {
             runtime_ = nvinfer1::createInferRuntime(g_logger_);
         }
 
-        // 清理
+        engine_ =
+            runtime_->deserializeCudaEngine(serialized_engine->data(), serialized_engine->size());
+        if (!engine_) {
+            serialized_engine->destroy();
+            tmp_engine->destroy();
+            parser->destroy();
+            network->destroy();
+            config->destroy();
+            builder->destroy();
+            throw std::runtime_error("ERROR: Failed to deserialize engine after build!");
+        }
+
+        std::cout << "Build and save engine to " << engine_path << " successfully." << std::endl;
+
+        serialized_engine->destroy();
+        tmp_engine->destroy();
         parser->destroy();
         network->destroy();
         config->destroy();
         builder->destroy();
     }
+
     nvinfer1::IExecutionContext* getAContext() {
         return engine_->createExecutionContext();
     }

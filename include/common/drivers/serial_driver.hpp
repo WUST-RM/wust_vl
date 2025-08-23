@@ -1,97 +1,118 @@
-// Copyright 2025 XiaoJian Wu
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 #pragma once
-
 #include <boost/asio.hpp>
-#include <boost/asio/serial_port_base.hpp>
+#include <boost/system/error_code.hpp>
 
-/// 串口参数配置结构
-struct SerialPortConfig {
-    unsigned int baud_rate; ///< 波特率
-    unsigned int char_size; ///< 数据位
-    boost::asio::serial_port_base::parity::type parity;
-    boost::asio::serial_port_base::stop_bits::type stop_bits;
-    boost::asio::serial_port_base::flow_control::type flow_control;
+#include <atomic>
+#include <deque>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
+#include <thread>
+#include <iostream>
 
-    SerialPortConfig(
-        unsigned int baud = 115200,
-        unsigned int csize = 8,
-        boost::asio::serial_port_base::parity::type par =
-            boost::asio::serial_port_base::parity::none,
-        boost::asio::serial_port_base::stop_bits::type sb =
-            boost::asio::serial_port_base::stop_bits::one,
-        boost::asio::serial_port_base::flow_control::type fc =
-            boost::asio::serial_port_base::flow_control::none
-    ):
-        baud_rate(baud),
-        char_size(csize),
-        parity(par),
-        stop_bits(sb),
-        flow_control(fc) {}
-};
 class SerialDriver {
 public:
-    SerialDriver(): io_(), port_(io_) {}
+    using ReceiveCallback = std::function<void(const uint8_t* data, std::size_t len)>;
+    using ErrorCallback   = std::function<void(const boost::system::error_code& ec)>;
 
-    /// 初始化：仅保存设备名和配置
-    void init_port(const std::string& device, const SerialPortConfig& config) {
+    struct SerialPortConfig {
+        unsigned int baud_rate = 115200;
+        unsigned int char_size = 8;
+        boost::asio::serial_port_base::parity::type parity = boost::asio::serial_port_base::parity::none;
+        boost::asio::serial_port_base::stop_bits::type stop_bits = boost::asio::serial_port_base::stop_bits::one;
+        boost::asio::serial_port_base::flow_control::type flow_control = boost::asio::serial_port_base::flow_control::none;
+    };
+
+    explicit SerialDriver(std::size_t read_buf_size = 4096)
+        : io_(),
+          port_(io_),
+          read_buf_(read_buf_size),
+          running_(false)
+    {}
+
+    ~SerialDriver() {
+        stop();
+    }
+
+    void init_port(const std::string& device, const SerialPortConfig& cfg) {
         device_ = device;
-        config_ = config;
+        config_ = cfg;
     }
 
-    /// 打开并应用配置
-    void open() {
-        port_.open(device_);
-        port_.set_option(boost::asio::serial_port_base::baud_rate(config_.baud_rate));
-        port_.set_option(boost::asio::serial_port_base::character_size(config_.char_size));
-        port_.set_option(boost::asio::serial_port_base::parity(config_.parity));
-        port_.set_option(boost::asio::serial_port_base::stop_bits(config_.stop_bits));
-        port_.set_option(boost::asio::serial_port_base::flow_control(config_.flow_control));
-    }
+    void set_receive_callback(ReceiveCallback cb) { receive_cb_ = std::move(cb); }
+    void set_error_callback(ErrorCallback cb) { error_cb_ = std::move(cb); }
 
-    /// 关闭串口
-    void close() {
-        if (port_.is_open())
-            port_.close();
-    }
-
-    /// 是否已打开
-    bool is_open() const {
-        return port_.is_open();
-    }
-
-    /// 接收数据，buf 必须预先 resize 好长度
-    /// @return 实际接收到的字节数
-    std::size_t receive(std::vector<uint8_t>& buf) {
+    bool start() {
         boost::system::error_code ec;
-        std::size_t n = port_.read_some(boost::asio::buffer(buf), ec);
-        if (ec)
-            throw boost::system::system_error(ec);
-        return n;
+        port_.open(device_, ec);
+        if(ec) {
+            if(error_cb_) error_cb_(ec);
+            return false;
+        }
+
+        port_.set_option(boost::asio::serial_port_base::baud_rate(config_.baud_rate), ec);
+        port_.set_option(boost::asio::serial_port_base::character_size(config_.char_size), ec);
+        port_.set_option(boost::asio::serial_port_base::parity(config_.parity), ec);
+        port_.set_option(boost::asio::serial_port_base::stop_bits(config_.stop_bits), ec);
+        port_.set_option(boost::asio::serial_port_base::flow_control(config_.flow_control), ec);
+
+        running_ = true;
+        read_thread_ = std::thread([this]() { read_loop(); });
+
+        return true;
     }
 
-    /// 发送一段数据
-    void send(const std::vector<uint8_t>& data) {
+    void stop() {
+        if(!running_) return;
+        running_ = false;
+
         boost::system::error_code ec;
-        boost::asio::write(port_, boost::asio::buffer(data), ec);
-        if (ec)
-            throw boost::system::system_error(ec);
+        if(port_.is_open()) port_.cancel(ec);
+        if(port_.is_open()) port_.close(ec);
+
+        if(read_thread_.joinable()) read_thread_.join();
+    }
+
+    bool is_open() const { return port_.is_open(); }
+
+    bool write(const std::vector<uint8_t>& data) {
+        if(!port_.is_open()) return false;
+        boost::system::error_code ec;
+        size_t bytes_written = boost::asio::write(port_, boost::asio::buffer(data), ec);
+        if(ec) {
+            if(error_cb_) error_cb_(ec);
+            return false;
+        }
+        return bytes_written == data.size();
     }
 
 private:
-    boost::asio::io_service io_;
+    void read_loop() {
+        while(running_ && port_.is_open()) {
+            boost::system::error_code ec;
+            size_t n = port_.read_some(boost::asio::buffer(read_buf_), ec);
+            if(ec) {
+                if(error_cb_) error_cb_(ec);
+                break;
+            }
+            if(n > 0 && receive_cb_) {
+                receive_cb_(read_buf_.data(), n);
+            }
+        }
+    }
+
+private:
+    boost::asio::io_context io_;
     boost::asio::serial_port port_;
+    std::vector<uint8_t> read_buf_;
     SerialPortConfig config_;
     std::string device_;
+
+    std::atomic<bool> running_;
+    std::thread read_thread_;
+
+    ReceiveCallback receive_cb_;
+    ErrorCallback error_cb_;
 };

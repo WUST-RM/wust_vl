@@ -6,7 +6,7 @@ target_sources(
         ${CMAKE_CURRENT_SOURCE_DIR}/utils/labeler.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/utils/manual_compensator.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/utils/trajectory_compensator.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/drivers/recorder.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/utils/recorder.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/drivers/crc8_crc16.cpp
 )
 target_include_directories(wust_vl_common PRIVATE

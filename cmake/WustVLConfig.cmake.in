@@ -15,5 +15,6 @@ set(
         wust_vl_ml_net
         wust_vl_common
         wust_vl_algorithm
+        wust_vl_video
 )
 

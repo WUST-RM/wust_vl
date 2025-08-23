@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
+#include <deque>
 #include <iostream>
 #include <map>
 #include <mutex>
@@ -164,4 +165,58 @@ private:
     std::mutex mtx_;
     std::chrono::steady_clock::time_point last_query_ = std::chrono::steady_clock::now();
     double valid_duration_; // 有效时间窗口（receive_dt_）
+};
+
+template<typename T>
+concept ArithmeticLike = requires(T a, T b, size_t n) {
+    {
+        a + b
+        } -> std::same_as<T>; // 支持加法
+    {
+        a / n
+        } -> std::same_as<T>; // 能被 size_t 整数除
+};
+
+template<ArithmeticLike T>
+class Averager {
+public:
+    explicit Averager(size_t max_size): max_size_(max_size) {}
+
+    void add(const T& value) {
+        if (values_.size() >= max_size_) {
+            values_.pop_front();
+        }
+        values_.push_back(value);
+    }
+
+    bool empty() const {
+        return values_.empty();
+    }
+    size_t size() const {
+        return values_.size();
+    }
+
+    /// 返回平均值
+    T average() const {
+        if (values_.empty()) {
+            if constexpr (std::is_arithmetic_v<T>)
+                return T(0);
+            else
+                return T {};
+        }
+        T sum = values_.front();
+        for (size_t i = 1; i < values_.size(); ++i) {
+            sum = sum + values_[i];
+        }
+        return sum / values_.size();
+    }
+
+    /// 清空
+    void clear() {
+        values_.clear();
+    }
+
+private:
+    size_t max_size_;
+    std::deque<T> values_;
 };
