@@ -1,77 +1,93 @@
-#include <yaml-cpp/yaml.h>
+#pragma once
 #include <functional>
-#include <vector>
-#include <string>
+#include <iostream>
+#include <memory>
 #include <mutex>
 #include <stdexcept>
-#include <iostream>
+#include <string>
 #include <typeinfo>
+#include <vector>
+#include <yaml-cpp/yaml.h>
 
 class ConfigBinder {
 public:
     /// 从文件初始化
-    explicit ConfigBinder(const std::string& path) { load(path); }
-    /// 从 YAML::Node 初始化
-    explicit ConfigBinder(const YAML::Node& node) { load(node); }
+    explicit ConfigBinder(const std::string& path) {
+        load(path);
+    }
 
     /// 有默认值的 bind
     template<typename T>
-    void bind(const std::string& key, T* var, const T& default_value) {
+    void bind(const std::vector<std::string>& keys, T* var, const T& default_value) {
         std::lock_guard<std::mutex> lock(mutex_);
         auto last_value = std::make_shared<T>(default_value);
 
         bindings_.push_back([=, this]() mutable {
-            if (config_[key]) {
+            YAML::Node node = traverse(keys);
+            if (node && node.IsDefined()) {
                 try {
-                    T value = config_[key].as<T>();
+                    T value = node.as<T>();
                     if (value != *last_value) {
                         *var = value;
                         *last_value = value;
-                        std::cout << "[ConfigBinder] Key=\"" << key
-                                  << "\" Updated Value=" << value
-                                  << " (type=" << typeid(T).name() << ")\n";
+                        std::cout << "[ConfigBinder] Key=";
+                        for (auto& k: keys)
+                            std::cout << "\"" << k << "\" ";
+                        std::cout << "Updated Value=" << value << " (type=" << typeid(T).name()
+                                  << ")\n";
                     }
                 } catch (const std::exception& e) {
-                    std::cerr << "[ConfigBinder] Type error on key: " 
-                              << key << " -> " << e.what()
-                              << ", keeping old=" << *last_value << "\n";
+                    std::cerr << "[ConfigBinder] Type error on key: ";
+                    for (auto& k: keys)
+                        std::cerr << k << " ";
+                    std::cerr << " -> " << e.what() << ", keeping old=" << *last_value << "\n";
                 }
             } else {
                 if (*last_value != default_value) {
                     *var = default_value;
                     *last_value = default_value;
-                    std::cerr << "[ConfigBinder] Missing key: " << key
-                              << ", fallback=" << default_value << "\n";
+                    std::cerr << "[ConfigBinder] Missing key: ";
+                    for (auto& k: keys)
+                        std::cerr << k << " ";
+                    std::cerr << ", fallback=" << default_value << "\n";
                 }
             }
         });
+
+        // 初次执行一次以设置初始值
         bindings_.back()();
     }
 
     /// 无默认值的 bind（必须存在）
     template<typename T>
-    void bind(const std::string& key, T* var) {
+    void bind(const std::vector<std::string>& keys, T* var) {
         std::lock_guard<std::mutex> lock(mutex_);
         auto last_value = std::make_shared<T>();
 
         bindings_.push_back([=, this]() mutable {
-            if (!config_[key]) {
-                throw std::runtime_error("[ConfigBinder] Missing required key: " + key);
+            YAML::Node node = traverse(keys);
+            if (!node || !node.IsDefined()) {
+                throw std::runtime_error("[ConfigBinder] Missing required key");
             }
             try {
-                T value = config_[key].as<T>();
+                T value = node.as<T>();
                 if (value != *last_value) {
                     *var = value;
                     *last_value = value;
-                    std::cout << "[ConfigBinder] Key=\"" << key
-                              << "\" Updated Value=" << value
-                              << " (type=" << typeid(T).name() << ")\n";
+                    std::cout << "[ConfigBinder] Key=";
+                    for (auto& k: keys)
+                        std::cout << "\"" << k << "\" ";
+                    std::cout << "Updated Value=" << value << " (type=" << typeid(T).name()
+                              << ")\n";
                 }
             } catch (const std::exception& e) {
-                throw std::runtime_error("[ConfigBinder] Type error on required key: " 
-                                         + key + " -> " + e.what());
+                throw std::runtime_error(
+                    "[ConfigBinder] Type error on required key -> " + std::string(e.what())
+                );
             }
         });
+
+        // 初次执行一次以设置初始值或抛出异常
         bindings_.back()();
     }
 
@@ -79,31 +95,27 @@ public:
     void reload(const std::string& path) {
         std::lock_guard<std::mutex> lock(mutex_);
         load(path);
-        //std::cout << "[ConfigBinder] Reloading from file: " << path << "\n";
-        for (auto& fn : bindings_) fn();
-    }
-
-    /// reload（YAML::Node）
-    void reload(const YAML::Node& node) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        load(node);
-        //std::cout << "[ConfigBinder] Reloading from YAML::Node\n";
-        for (auto& fn : bindings_) fn();
+        for (auto& fn: bindings_)
+            fn();
     }
 
 private:
     void load(const std::string& path) {
         try {
             config_ = YAML::LoadFile(path);
-            //std::cout << "[ConfigBinder] Loaded file: " << path << "\n";
         } catch (const std::exception& e) {
             throw std::runtime_error(std::string("[ConfigBinder] Failed to load: ") + e.what());
         }
     }
 
-    void load(const YAML::Node& node) {
-        config_ = node;
-        std::cout << "[ConfigBinder] Loaded from Node\n";
+    YAML::Node traverse(const std::vector<std::string>& keys) const {
+        YAML::Node node = YAML::Clone(config_); // 深拷贝整个 config_
+        for (const auto& key: keys) {
+            if (!node || !node[key])
+                return YAML::Node(); // 不存在就返回空节点
+            node = node[key];
+        }
+        return node;
     }
 
     YAML::Node config_;
@@ -111,54 +123,52 @@ private:
     std::mutex mutex_;
 };
 
-
+/// bindConfig 辅助函数（有默认值）
 template<typename T>
-inline void bindConfig(std::shared_ptr<ConfigBinder> binder,
-                       const std::string& key,
-                       T* var,
-                       const T& default_value,
-                       const std::string& fallback_path = "config.yaml") {
+inline void bindConfig(
+    std::shared_ptr<ConfigBinder> binder,
+    const std::vector<std::string>& keys,
+    T* var,
+    const T& default_value,
+    const std::string& fallback_path = "config.yaml"
+) {
     if (binder) {
-        binder->bind(key, var, default_value);
+        binder->bind(keys, var, default_value);
     } else {
         try {
             YAML::Node config = YAML::LoadFile(fallback_path);
-            if (config[key]) {
-                *var = config[key].as<T>();
-                std::cout << "[bindConfig] (no binder) Key=\"" << key 
-                          << "\" Value=" << *var << "\n";
+            YAML::Node node = config;
+            for (auto& k: keys)
+                node = node[k];
+            if (node && node.IsDefined()) {
+                *var = node.as<T>();
             } else {
                 *var = default_value;
-                std::cerr << "[bindConfig] (no binder) Missing key: " << key
-                          << ", fallback=" << default_value << "\n";
             }
-        } catch (const std::exception& e) {
+        } catch (...) {
             *var = default_value;
-            std::cerr << "[bindConfig] (no binder) Load failed: " << e.what()
-                      << ", fallback=" << default_value << "\n";
         }
     }
 }
 
-/// 无默认值版本
+/// bindConfig 辅助函数（无默认值）
 template<typename T>
-inline void bindConfig(std::shared_ptr<ConfigBinder> binder,
-                       const std::string& key,
-                       T* var,
-                       const std::string& fallback_path = "config.yaml") {
+inline void bindConfig(
+    std::shared_ptr<ConfigBinder> binder,
+    const std::vector<std::string>& keys,
+    T* var,
+    const std::string& fallback_path = "config.yaml"
+) {
     if (binder) {
-        binder->bind(key, var);
+        binder->bind(keys, var);
     } else {
-        try {
-            YAML::Node config = YAML::LoadFile(fallback_path);
-            if (!config[key]) {
-                throw std::runtime_error("[bindConfig] (no binder) Missing required key: " + key);
-            }
-            *var = config[key].as<T>();
-            std::cout << "[bindConfig] (no binder) Key=\"" << key 
-                      << "\" Value=" << *var << "\n";
-        } catch (const std::exception& e) {
-            throw std::runtime_error("[bindConfig] (no binder) Load failed: " + std::string(e.what()));
+        YAML::Node config = YAML::LoadFile(fallback_path);
+        YAML::Node node = config;
+        for (auto& k: keys)
+            node = node[k];
+        if (!node || !node.IsDefined()) {
+            throw std::runtime_error("[bindConfig] Missing required key");
         }
+        *var = node.as<T>();
     }
 }
