@@ -129,46 +129,24 @@ inline void bindConfig(
     std::shared_ptr<ConfigBinder> binder,
     const std::vector<std::string>& keys,
     T* var,
-    const T& default_value,
-    const std::string& fallback_path = "config.yaml"
+    const T& default_value
 ) {
-    if (binder) {
+    try {
         binder->bind(keys, var, default_value);
-    } else {
-        try {
-            YAML::Node config = YAML::LoadFile(fallback_path);
-            YAML::Node node = config;
-            for (auto& k: keys)
-                node = node[k];
-            if (node && node.IsDefined()) {
-                *var = node.as<T>();
-            } else {
-                *var = default_value;
-            }
-        } catch (...) {
-            *var = default_value;
-        }
+    } catch (YAML::Exception& e) {
+        std::cerr << "[ConfigBinder]"
+                  << "bind error" << e.what() << std::endl;
     }
 }
 
 /// bindConfig 辅助函数（无默认值）
 template<typename T>
-inline void bindConfig(
-    std::shared_ptr<ConfigBinder> binder,
-    const std::vector<std::string>& keys,
-    T* var,
-    const std::string& fallback_path = "config.yaml"
-) {
-    if (binder) {
+inline void
+bindConfig(std::shared_ptr<ConfigBinder> binder, const std::vector<std::string>& keys, T* var) {
+    try {
         binder->bind(keys, var);
-    } else {
-        YAML::Node config = YAML::LoadFile(fallback_path);
-        YAML::Node node = config;
-        for (auto& k: keys)
-            node = node[k];
-        if (!node || !node.IsDefined()) {
-            throw std::runtime_error("[bindConfig] Missing required key");
-        }
-        *var = node.as<T>();
+    } catch (YAML::Exception& e) {
+        std::cerr << "[ConfigBinder]"
+                  << "bind error" << e.what() << std::endl;
     }
 }

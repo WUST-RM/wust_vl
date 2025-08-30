@@ -1,18 +1,17 @@
 #pragma once
 
+#include "../concurrency/monitored_thread.hpp"
 #include <chrono>
 #include <condition_variable>
 #include <functional>
 #include <iomanip>
 #include <mutex>
 #include <thread>
-
 class Timer {
 public:
     using Callback = std::function<void(double)>;
 
     Timer() = default;
-
     ~Timer() {
         stop();
     }
@@ -22,50 +21,50 @@ public:
         Callback callback,
         std::chrono::microseconds spin_margin = std::chrono::microseconds(200)
     ) {
-        stop(); // 若已在运行则先停止
+        stop();
 
         interval_ = std::chrono::microseconds(static_cast<int64_t>(1e6 / rate_hz));
         callback_ = std::move(callback);
-        running_ = true;
 
-        thread_ = std::thread([this, spin_margin]() {
-            auto next_time = std::chrono::steady_clock::now() + interval_;
-            auto last_time = std::chrono::steady_clock::now();
+        thread_ =
+            MonitoredThread::create("TimerThread", [this](std::shared_ptr<MonitoredThread> self) {
+                auto next_time = std::chrono::steady_clock::now() + interval_;
+                auto last_time = std::chrono::steady_clock::now();
 
-            while (true) {
-                {
-                    std::unique_lock<std::mutex> lock(mtx_);
-                    if (cv_.wait_until(lock, next_time - spin_margin, [this]() {
-                            return !running_;
-                        })) {
-                        break;
+                while (self->isAlive()) {
+                    auto now = std::chrono::steady_clock::now();
+
+                    if (now < next_time) {
+                        auto sleep_dur = next_time - now - std::chrono::milliseconds(1);
+                        if (sleep_dur.count() > 0)
+                            std::this_thread::sleep_for(sleep_dur);
                     }
+
+                    now = std::chrono::steady_clock::now();
+                    double dt_ms =
+                        std::chrono::duration<double, std::milli>(now - last_time).count();
+                    last_time = now;
+
+                    self->heartbeat();
+
+                    if (callback_)
+                        callback_(dt_ms);
+
+                    next_time += interval_;
                 }
+            });
 
-                while (std::chrono::steady_clock::now() < next_time) {
-                }
+        // 注册到全局管理器
+        ThreadManager::instance().registerThread(thread_);
 
-                auto now = std::chrono::steady_clock::now();
-                double dt_ms = std::chrono::duration<double, std::milli>(now - last_time).count();
-                last_time = now;
-
-                if (callback_) {
-                    callback_(dt_ms);
-                }
-
-                next_time += interval_;
-            }
-        });
+        running_ = true;
     }
 
     void stop() {
-        {
-            std::lock_guard<std::mutex> lock(mtx_);
-            running_ = false;
-        }
-        cv_.notify_one();
-        if (thread_.joinable()) {
-            thread_.join();
+        running_ = false;
+        if (thread_) {
+            thread_->stop();
+            ThreadManager::instance().unregisterThread(thread_->getName());
         }
     }
 
@@ -76,9 +75,7 @@ public:
 private:
     std::chrono::microseconds interval_;
     Callback callback_;
-    std::thread thread_;
-    std::mutex mtx_;
-    std::condition_variable cv_;
+    std::shared_ptr<MonitoredThread> thread_;
     bool running_ = false;
 };
 namespace time_utils {

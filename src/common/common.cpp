@@ -1,6 +1,7 @@
 #include "algorithm/pnp_solver.hpp"
 #include "common/concurrency/ThreadPool.h"
 #include "common/concurrency/adaptive_resource_pool.hpp"
+#include "common/concurrency/monitored_thread.hpp"
 #include "common/concurrency/queues.hpp"
 #include "common/drivers/serial_driver.hpp"
 #include "common/utils/config_binder.hpp"

@@ -73,7 +73,7 @@ install(
     TARGETS
         ${TARGETS_LIST}
     EXPORT
-        wust_vlTarget
+        wust_vlTargets
     RUNTIME DESTINATION
         bin
     LIBRARY DESTINATION
@@ -86,8 +86,8 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/VersionConfig.h DESTINATION include/wu
 
 
 
-install(EXPORT wust_vlTarget
-    FILE wust_vlTarget.cmake
+install(EXPORT wust_vlTargets
+    FILE wust_vlTargets.cmake
     NAMESPACE wust_vl::
     DESTINATION lib/cmake/wust_vl
 )

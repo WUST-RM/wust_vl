@@ -22,7 +22,7 @@
 #include <iostream>
 #include <mutex>
 #include <optional>
-#include <stop_token>
+#include <queue>
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -36,8 +36,9 @@
  *   - Object pool for TaskItem nodes (no per-task new/delete)
  *   - Spin-then-block wait strategy
  *   - Cache-line–padded counters to avoid false sharing
- *   - Per-task timeout via std::jthread
- *   - Added atomic in_pool flag for safer memory management and to avoid double free
+ *   - Centralized timeout watcher thread (no per-task thread)
+ *   - Atomic in_pool flag for safe recycling
+ *   - Removed std::jthread (use std::thread + stop flag)
  */
 class ThreadPool {
 public:
@@ -60,13 +61,35 @@ public:
 
         // Launch workers
         for (size_t i = 0; i < num_threads; ++i)
-            workers_.emplace_back([this](std::stop_token st) { workerLoop(st); });
+            workers_.emplace_back([this] { workerLoop(); });
+
+        // Launch centralized timeout watcher
+        timeout_thread_ = std::thread([this] { timeoutWatcherLoop(); });
     }
 
     ~ThreadPool() {
+        // signal stop for workers and timeout watcher
         stop_.store(true, std::memory_order_relaxed);
+
+        // Wake worker threads
         cv_.notify_all();
-        // workers (std::jthread) join automatically
+
+        // Wake timeout watcher
+        {
+            std::lock_guard<std::mutex> lk(timeout_mtx_);
+            timeout_stop_.store(true, std::memory_order_relaxed);
+        }
+        timeout_cv_.notify_all();
+
+        // join worker threads
+        for (auto& t: workers_) {
+            if (t.joinable())
+                t.join();
+        }
+
+        // join timeout watcher
+        if (timeout_thread_.joinable())
+            timeout_thread_.join();
 
         // cleanup pool
         TaskItem* item;
@@ -105,7 +128,7 @@ public:
                 try {
                     prom->set_exception(std::current_exception());
                 } catch (const std::future_error&) {
-                    // promise 已被设置，忽略异常
+                    // promise may have already been satisfied; ignore
                 }
             }
         };
@@ -137,6 +160,20 @@ public:
         else
             normal_q_.push(node);
 
+        // Register timeout if needed (store stop_source copy to avoid touching recycled node)
+        if (timeout_ms > 0) {
+            const auto deadline =
+                std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+            TimeoutEntry entry;
+            entry.deadline = deadline;
+            entry.src = node->stop_src; // copy stop_source (shared state)
+            {
+                std::lock_guard<std::mutex> lk(timeout_mtx_);
+                timeout_q_.push(std::move(entry));
+            }
+            timeout_cv_.notify_one();
+        }
+
         cv_.notify_one();
         return fut;
     }
@@ -164,6 +201,18 @@ private:
         std::atomic<bool> in_pool { true }; // true means node is in pool and available
     };
 
+    // Timeout management: store stop_source copy + deadline (no pointer back to TaskItem)
+    struct TimeoutEntry {
+        std::chrono::steady_clock::time_point deadline {};
+        std::stop_source src {};
+    };
+    struct TimeoutCmp {
+        bool operator()(const TimeoutEntry& a, const TimeoutEntry& b) const {
+            // min-heap by deadline
+            return a.deadline > b.deadline;
+        }
+    };
+
     // Return node to pool safely, avoid double return
     void cleanupNode(TaskItem* node) {
         if (!node)
@@ -183,14 +232,16 @@ private:
         pool_.push(node);
     }
 
-    void workerLoop(std::stop_token pool_stop) {
-        while (!pool_stop.stop_requested() && !stop_.load(std::memory_order_relaxed)) {
+    void workerLoop() {
+        while (!stop_.load(std::memory_order_relaxed)) {
             TaskItem* item = nullptr;
             // spin-then-block:
             for (int i = 0; i < 100; ++i) {
                 if (high_q_.pop(item) || normal_q_.pop(item))
                     break;
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
                 __asm__ volatile("pause");
+#endif
             }
             if (!item) {
                 std::unique_lock<std::mutex> lk(wait_mtx_);
@@ -214,22 +265,8 @@ private:
                 continue;
             }
 
-            // timeout thread
-            std::jthread timer;
-            if (item->timeout_ms > 0) {
-                timer = std::jthread([&, ms = item->timeout_ms](std::stop_token t) {
-                    if (!t.stop_requested())
-                        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
-                    if (!t.stop_requested())
-                        item->stop_src.request_stop();
-                });
-            }
-
-            // execute task
+            // Execute task (stop_token will be requested by timeout watcher if needed)
             item->func(item->stop_src.get_token());
-
-            if (timer.joinable())
-                timer.request_stop();
 
             busy_.fetch_sub(1, std::memory_order_relaxed);
             pending_.fetch_sub(1, std::memory_order_relaxed);
@@ -244,8 +281,41 @@ private:
         }
     }
 
+    void timeoutWatcherLoop() {
+        std::unique_lock<std::mutex> lk(timeout_mtx_);
+        while (!timeout_stop_.load(std::memory_order_relaxed)) {
+            if (timeout_q_.empty()) {
+                timeout_cv_.wait(lk, [this] {
+                    return timeout_stop_.load(std::memory_order_relaxed) || !timeout_q_.empty();
+                });
+                if (timeout_stop_.load(std::memory_order_relaxed))
+                    break;
+            }
+
+            while (!timeout_q_.empty()) {
+                auto now = std::chrono::steady_clock::now();
+                auto& top = timeout_q_.top();
+                if (top.deadline > now) {
+                    // sleep until the next deadline or stop requested
+                    timeout_cv_.wait_until(lk, top.deadline, [this] {
+                        return timeout_stop_.load(std::memory_order_relaxed);
+                    });
+                    if (timeout_stop_.load(std::memory_order_relaxed))
+                        break;
+                } else {
+                    // time reached: request stop on the saved stop_source
+                    auto entry = top; // copy
+                    timeout_q_.pop();
+                    lk.unlock();
+                    entry.src.request_stop(); // harmless if task already finished
+                    lk.lock();
+                }
+            }
+        }
+    }
+
     // Workers
-    std::vector<std::jthread> workers_;
+    std::vector<std::thread> workers_;
     std::atomic<bool> stop_ { false };
 
     // Two lock-free queues
@@ -262,11 +332,18 @@ private:
     // Config
     size_t max_pending_;
 
-    // Waiting
+    // Waiting (task availability)
     std::mutex wait_mtx_;
     std::condition_variable cv_;
 
     // Completion notification
     std::mutex done_mtx_;
     std::condition_variable done_cv_;
+
+    // Centralized timeout watcher
+    std::thread timeout_thread_;
+    std::atomic<bool> timeout_stop_ { false };
+    std::mutex timeout_mtx_;
+    std::condition_variable timeout_cv_;
+    std::priority_queue<TimeoutEntry, std::vector<TimeoutEntry>, TimeoutCmp> timeout_q_;
 };

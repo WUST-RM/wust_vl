@@ -52,8 +52,9 @@ HikCamera::~HikCamera() {
         recorder_.reset();
         changeFileOwner(record_path, getOriginalUsername());
     }
-    if (capture_thread_.joinable()) {
-        capture_thread_.join();
+    if (capture_thread_) {
+        capture_thread_->stop();
+        ThreadManager::instance().unregisterThread(capture_thread_->getName());
     }
     if (camera_handle_) {
         MV_CC_StopGrabbing(camera_handle_);
@@ -69,6 +70,9 @@ bool HikCamera::initializeCamera(const std::string& target_sn) {
     last_target_sn_ = target_sn;
 
     while (true) {
+        if (capture_thread_) {
+            capture_thread_->heartbeat();
+        }
         MV_CC_DEVICE_INFO_LIST device_list = { 0 };
 
         int n_ret = MV_CC_EnumDevices(MV_USB_DEVICE, &device_list);
@@ -182,6 +186,9 @@ void HikCamera::setParameters(
     bool reverse_x,
     bool reverse_y
 ) {
+    if (capture_thread_) {
+        capture_thread_->heartbeat();
+    }
     MVCC_FLOATVALUE f_value;
     // 设置像素格式
     int status = MV_CC_SetEnumValueByString(camera_handle_, "PixelFormat", pixel_format.c_str());
@@ -268,7 +275,13 @@ void HikCamera::startCamera(bool if_recorder) {
         expected_height_ = stParam.nCurValue;
     }
     if (trigger_type_ != TriggerType::Software) {
-        capture_thread_ = std::thread([this] { this->hikCaptureLoop(); });
+        capture_thread_ = MonitoredThread::create(
+            "HikCaptureThread",
+            [this](std::shared_ptr<MonitoredThread> self) { this->hikCaptureLoop(self); }
+        );
+
+        // 注册到全局管理器
+        ThreadManager::instance().registerThread(capture_thread_);
     }
 
     if (if_recorder) {
@@ -325,7 +338,9 @@ void HikCamera::startCamera(bool if_recorder) {
 
 bool HikCamera::restartCamera() {
     WUST_WARN(hik_logger_) << "Restarting camera from scratch...";
-
+    if (capture_thread_) {
+        capture_thread_->heartbeat();
+    }
     MV_CC_StopGrabbing(camera_handle_);
     MV_CC_CloseDevice(camera_handle_);
     MV_CC_DestroyHandle(&camera_handle_);
@@ -360,7 +375,7 @@ bool HikCamera::restartCamera() {
     return true;
 }
 
-void HikCamera::hikCaptureLoop() {
+void HikCamera::hikCaptureLoop(std::shared_ptr<MonitoredThread> self) {
     MV_FRAME_OUT out_frame;
     WUST_INFO(hik_logger_) << "Starting image capture loop!";
 
@@ -372,7 +387,8 @@ void HikCamera::hikCaptureLoop() {
     int frame_counter = 0;
 
     try {
-        while (!stop_signal_) {
+        while (self->isAlive()) {
+            self->heartbeat();
             int n_ret = MV_CC_GetImageBuffer(camera_handle_, &out_frame, 100);
             if (n_ret == MV_OK) {
                 in_fail_state = false;

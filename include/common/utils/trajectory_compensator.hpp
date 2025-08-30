@@ -17,7 +17,6 @@
 #include <Eigen/Dense>
 #include <memory>
 #include <tuple>
-
 class TrajectoryCompensator {
 public:
     TrajectoryCompensator() = default;
@@ -70,11 +69,11 @@ protected:
 // Factory class for trajectory compensator
 class CompensatorFactory {
 public:
-    static std::unique_ptr<TrajectoryCompensator> createCompensator(const std::string& type) {
+    static std::shared_ptr<TrajectoryCompensator> createCompensator(const std::string& type) {
         if (type == "ideal") {
-            return std::make_unique<IdealCompensator>();
+            return std::make_shared<IdealCompensator>();
         } else if (type == "resistance") {
-            return std::make_unique<ResistanceCompensator>();
+            return std::make_shared<ResistanceCompensator>();
         } else {
             return nullptr;
         }
