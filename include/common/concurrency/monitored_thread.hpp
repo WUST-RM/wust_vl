@@ -9,7 +9,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
-class MonitoredThread : public std::enable_shared_from_this<MonitoredThread> {
+class MonitoredThread: public std::enable_shared_from_this<MonitoredThread> {
 public:
     enum class Status { Running, Stopped, Hung, Paused };
 
@@ -21,7 +21,9 @@ public:
         return mt;
     }
 
-    ~MonitoredThread() { stop(); }
+    ~MonitoredThread() {
+        stop();
+    }
 
     void stop() {
         {
@@ -30,8 +32,10 @@ public:
             status_ = Status::Stopped;
         }
         cv_.notify_all();
-        if (th_.joinable()) th_.join();
-        if (monitor_.joinable()) monitor_.join();
+        if (th_.joinable())
+            th_.join();
+        if (monitor_.joinable())
+            monitor_.join();
     }
 
     void heartbeat() {
@@ -39,13 +43,20 @@ public:
         last_heartbeat_ = std::chrono::steady_clock::now();
     }
 
-    Status getStatus() const { return status_; }
-    std::string getName() const { return name_; }
-    bool isAlive() const { return running_; }
+    Status getStatus() const {
+        return status_;
+    }
+    std::string getName() const {
+        return name_;
+    }
+    bool isAlive() const {
+        return running_;
+    }
 
     void pause() {
         std::lock_guard<std::mutex> lk(mtx_);
-        if (status_ == Status::Running) status_ = Status::Paused;
+        if (status_ == Status::Running)
+            status_ = Status::Paused;
     }
 
     void resume() {
@@ -63,7 +74,7 @@ public:
     }
 
 private:
-    explicit MonitoredThread(const std::string& name) : name_(name) {}
+    explicit MonitoredThread(const std::string& name): name_(name) {}
 
     void start(Task task) {
         running_ = true;
@@ -72,7 +83,8 @@ private:
 
         // 工作线程
         th_ = std::thread([this, task]() {
-            if (task) task(shared_from_this());
+            if (task)
+                task(shared_from_this());
             running_ = false;
         });
 
@@ -81,9 +93,10 @@ private:
             while (running_) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 std::lock_guard<std::mutex> lk(mtx_);
-                
+
                 // 如果线程暂停，则不检查心跳，不更新 Hung 状态
-                if (status_ == Status::Paused) continue;
+                if (status_ == Status::Paused)
+                    continue;
 
                 auto now = std::chrono::steady_clock::now();
                 if (now - last_heartbeat_ > std::chrono::seconds(2)) {
@@ -101,10 +114,9 @@ private:
     std::mutex mtx_;
     std::condition_variable cv_;
     std::chrono::steady_clock::time_point last_heartbeat_;
-    std::atomic<bool> running_{false};
-    std::atomic<Status> status_{Status::Stopped};
+    std::atomic<bool> running_ { false };
+    std::atomic<Status> status_ { Status::Stopped };
 };
-
 
 // ---------------------- ThreadManager ----------------------
 class ThreadManager {

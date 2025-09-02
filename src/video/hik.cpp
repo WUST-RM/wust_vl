@@ -65,16 +65,24 @@ HikCamera::~HikCamera() {
     WUST_INFO(hik_logger_) << "Camera destroyed!";
 }
 
-// 初始化相机：枚举设备、创建句柄、打开设备、获取图像信息等
+
 bool HikCamera::initializeCamera(const std::string& target_sn) {
     last_target_sn_ = target_sn;
+
+
+    if (camera_handle_ != nullptr) {
+        WUST_INFO(hik_logger_) << "Closing previously opened camera";
+        MV_CC_CloseDevice(camera_handle_);
+        MV_CC_DestroyHandle(camera_handle_);
+        camera_handle_ = nullptr;
+    }
 
     while (true) {
         if (capture_thread_) {
             capture_thread_->heartbeat();
         }
-        MV_CC_DEVICE_INFO_LIST device_list = { 0 };
 
+        MV_CC_DEVICE_INFO_LIST device_list = { 0 };
         int n_ret = MV_CC_EnumDevices(MV_USB_DEVICE, &device_list);
         if (n_ret != MV_OK) {
             WUST_ERROR(hik_logger_) << "MV_CC_EnumDevices failed, error code: " << n_ret;
@@ -127,6 +135,7 @@ bool HikCamera::initializeCamera(const std::string& target_sn) {
         if (n_ret != MV_OK) {
             WUST_ERROR(hik_logger_) << "MV_CC_OpenDevice failed: " << n_ret;
             MV_CC_DestroyHandle(camera_handle_);
+            camera_handle_ = nullptr;
             std::this_thread::sleep_for(std::chrono::seconds(1));
             continue;
         }
@@ -136,6 +145,7 @@ bool HikCamera::initializeCamera(const std::string& target_sn) {
             WUST_ERROR(hik_logger_) << "MV_CC_GetImageInfo failed: " << n_ret;
             MV_CC_CloseDevice(camera_handle_);
             MV_CC_DestroyHandle(camera_handle_);
+            camera_handle_ = nullptr;
             std::this_thread::sleep_for(std::chrono::seconds(1));
             continue;
         }
@@ -150,6 +160,7 @@ bool HikCamera::initializeCamera(const std::string& target_sn) {
         return true;
     }
 }
+
 
 bool HikCamera::enableTrigger(TriggerType type, const std::string& source, int64_t activation) {
     trigger_type_ = type;
