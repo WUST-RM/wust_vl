@@ -41,7 +41,7 @@ endif()
 
 if(BUILD_WITH_TRT)
     find_package(CUDAToolkit REQUIRED)
-    set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};/home/hy/TensorRT-8.5.2.2")
+    set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};/home/hy/TensorRT-10.6.0.26")
     find_package(TensorRT REQUIRED)
     enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 14)

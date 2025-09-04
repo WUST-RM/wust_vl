@@ -1,4 +1,5 @@
 add_library(wust_vl_algorithm SHARED)
+include_directories(include)
 target_sources(
     wust_vl_algorithm
         PRIVATE

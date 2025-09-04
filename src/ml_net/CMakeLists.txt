@@ -20,7 +20,7 @@ if(BUILD_WITH_OPENVINO)
 endif()
 
 if(BUILD_WITH_TRT)
-    target_link_libraries(wust_vl_ml_net PRIVATE TensorRT::TensorRT CUDA::cudart /home/hy/TensorRT-8.5.2.2/lib/libnvonnxparser.so)
+    target_link_libraries(wust_vl_ml_net PRIVATE TensorRT::TensorRT CUDA::cudart /home/hy/TensorRT-10.6.0.26/lib/libnvonnxparser.so)
     target_compile_definitions(wust_vl_ml_net PRIVATE USE_TRT)
 endif()
 

@@ -20,20 +20,30 @@ struct TensorRTNet::Impl {
         cudaFree(device_buffers_[input_idx_]);
 
         if (context_)
-            context_->destroy();
+            delete context_;
         if (engine_)
-            engine_->destroy();
+            delete engine_;
         if (runtime_)
-            runtime_->destroy();
+            delete runtime_;
     }
     bool init(const Params& params) {
         params_ = params;
         buildEngine(params_.model_path);
         TRT_ASSERT(context_ = engine_->createExecutionContext());
-        TRT_ASSERT((input_idx_ = engine_->getBindingIndex("images")) == 0);
-        TRT_ASSERT((output_idx_ = engine_->getBindingIndex("output")) == 1);
-        input_dims_ = engine_->getBindingDimensions(input_idx_);
-        output_dims_ = engine_->getBindingDimensions(output_idx_);
+        TRT_ASSERT(context_ != nullptr);
+        input_name_ = engine_->getIOTensorName(0);
+        output_name_ = engine_->getIOTensorName(1);
+        input_idx_ = 0;
+        output_idx_ = 1;
+        TRT_ASSERT(context_->setInputShape(
+            input_name_,
+            nvinfer1::Dims4 { 1, 3, params_.input_h, params_.input_w }
+        ));
+        TRT_ASSERT(context_->allInputShapesSpecified());
+
+        input_dims_ = context_->getTensorShape(input_name_);
+        output_dims_ = context_->getTensorShape(output_name_);
+
         input_sz_ = input_dims_.d[1] * input_dims_.d[2] * input_dims_.d[3];
         output_sz_ = output_dims_.d[1] * output_dims_.d[2];
         TRT_ASSERT(cudaMalloc(&device_buffers_[input_idx_], input_sz_ * sizeof(float)) == 0);
@@ -83,7 +93,7 @@ struct TensorRTNet::Impl {
                 static_cast<int>(nvinfer1::ILogger::Severity::kWARNING)
             ))
         {
-            throw std::runtime_error("ERROR: Failed to parse ONNX file: " + onnx_path);
+            throw std::runtime_error("Failed to parse ONNX file: " + onnx_path);
         }
 
         auto config = builder->createBuilderConfig();
@@ -91,12 +101,13 @@ struct TensorRTNet::Impl {
             config->setFlag(nvinfer1::BuilderFlag::kFP16);
         }
 
-        nvinfer1::ICudaEngine* tmp_engine = builder->buildEngineWithConfig(*network, *config);
-        if (!tmp_engine) {
-            throw std::runtime_error("ERROR: Failed to build engine from ONNX: " + onnx_path);
-        }
+        nvinfer1::IHostMemory* serializedEngine =
+            builder->buildSerializedNetwork(*network, *config);
+        nvinfer1::IRuntime* runtime_ = nvinfer1::createInferRuntime(g_logger_);
+        nvinfer1::ICudaEngine* engine_ =
+            runtime_->deserializeCudaEngine(serializedEngine->data(), serializedEngine->size());
 
-        auto serialized_engine = tmp_engine->serialize();
+        auto serialized_engine = engine_->serialize();
         {
             std::ofstream out_file(engine_path, std::ios::binary);
             out_file.write(
@@ -112,23 +123,21 @@ struct TensorRTNet::Impl {
         engine_ =
             runtime_->deserializeCudaEngine(serialized_engine->data(), serialized_engine->size());
         if (!engine_) {
-            serialized_engine->destroy();
-            tmp_engine->destroy();
-            parser->destroy();
-            network->destroy();
-            config->destroy();
-            builder->destroy();
+            delete serialized_engine;
+            delete parser;
+            delete network;
+            delete config;
+            delete builder;
             throw std::runtime_error("ERROR: Failed to deserialize engine after build!");
         }
 
         std::cout << "Build and save engine to " << engine_path << " successfully." << std::endl;
 
-        serialized_engine->destroy();
-        tmp_engine->destroy();
-        parser->destroy();
-        network->destroy();
-        config->destroy();
-        builder->destroy();
+        delete serialized_engine;
+        delete parser;
+        delete network;
+        delete config;
+        delete builder;
     }
 
     nvinfer1::IExecutionContext* getAContext() {
@@ -173,8 +182,8 @@ struct TensorRTNet::Impl {
     }
 
     void infer(void* input_data, nvinfer1::IExecutionContext* context) {
-        context->setTensorAddress("images", input_data);
-        context->setTensorAddress("output", device_buffers_[output_idx_]);
+        context->setTensorAddress(input_name_, input_data);
+        context->setTensorAddress(output_name_, device_buffers_[output_idx_]);
 
         if (!context->enqueueV3(stream_)) {
             std::cerr << "enqueueV3 failed!";
@@ -196,6 +205,8 @@ struct TensorRTNet::Impl {
     nvinfer1::Dims input_dims_;
     nvinfer1::Dims output_dims_;
     cudaStream_t stream_;
+    const char *input_name_;
+    const char *output_name_;
 };
 TensorRTNet::TensorRTNet(): _impl(std::make_unique<Impl>()) {}
 TensorRTNet::~TensorRTNet() {

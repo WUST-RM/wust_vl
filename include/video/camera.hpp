@@ -41,6 +41,7 @@ public:
     void stop();
     void read();
     ImageFrame readImage();
+    void enableHikTrigger(TriggerType type, const std::string& source, int64_t activation);
     void setFrameCallback(std::function<void(ImageFrame&)> cb);
     struct Impl;
     std::unique_ptr<Impl> _impl;

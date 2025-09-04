@@ -256,10 +256,43 @@ inline void initLogger(
         logger.enableFileOutput(filename.string());
     }
 }
+inline void logAndThrow(
+    const std::string& msg,
+    const std::string& node,
+    const char* file,
+    int line
+) {
+    std::ostringstream oss;
+    oss << msg;
 
+    // 直接输出日志（等级 ERROR）
+    {
+        std::lock_guard<std::mutex> lock(Logger::getInstance().getMutex());
+        std::ostringstream full_msg;
+        full_msg << "[" << getTimeStr() << "]"
+                 << "[ERROR]"
+                 << "[" << node << "]"
+                 << "[" << file << ":" << line << "] " << oss.str();
+
+        if (Logger::getInstance().isColorOutputEnabled()) {
+            std::cerr << colorForLevel(LogLevel::ERROR) << full_msg.str() << colorReset()
+                      << std::endl;
+        } else {
+            std::cerr << full_msg.str() << std::endl;
+        }
+
+        if (Logger::getInstance().isFileOutputEnabled()) {
+            Logger::getInstance().fileStream() << full_msg.str() << std::endl;
+        }
+    }
+
+    throw std::runtime_error(oss.str());
+}
 // ========== 宏定义 ==========
 #define WUST_MAIN(node) LoggerStream(LogLevel::MAIN, node, __FILE__, __LINE__)
 #define WUST_DEBUG(node) LoggerStream(LogLevel::DEBUG, node, __FILE__, __LINE__)
 #define WUST_INFO(node) LoggerStream(LogLevel::INFO, node, __FILE__, __LINE__)
 #define WUST_WARN(node) LoggerStream(LogLevel::WARN, node, __FILE__, __LINE__)
 #define WUST_ERROR(node) LoggerStream(LogLevel::ERROR, node, __FILE__, __LINE__)
+#define WUST_THROW_ERROR(node, msg) \
+    logAndThrow((msg), (node), __FILE__, __LINE__)

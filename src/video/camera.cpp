@@ -114,4 +114,8 @@ ImageFrame Camera::readImage() {
 void Camera::setFrameCallback(std::function<void(ImageFrame&)> cb) {
     _impl->setFrameCallback(cb);
 }
+void Camera::enableHikTrigger(TriggerType type, const std::string& source, int64_t activation)
+{
+    _impl->hik_camera_->enableTrigger(type, source, activation);
+}
 } // namespace wust_vl_video

@@ -36,6 +36,8 @@ class TensorRTNet {
 public:
     struct Params {
         std::string model_path;
+        int input_w;
+        int input_h;
     };
     TensorRTNet();
     ~TensorRTNet();
