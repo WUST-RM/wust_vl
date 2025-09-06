@@ -65,10 +65,8 @@ HikCamera::~HikCamera() {
     WUST_INFO(hik_logger_) << "Camera destroyed!";
 }
 
-
 bool HikCamera::initializeCamera(const std::string& target_sn) {
     last_target_sn_ = target_sn;
-
 
     if (camera_handle_ != nullptr) {
         WUST_INFO(hik_logger_) << "Closing previously opened camera";
@@ -77,7 +75,7 @@ bool HikCamera::initializeCamera(const std::string& target_sn) {
         camera_handle_ = nullptr;
     }
 
-    while (true) {
+    while (!stop_signal_) {
         if (capture_thread_) {
             capture_thread_->heartbeat();
         }
@@ -160,7 +158,6 @@ bool HikCamera::initializeCamera(const std::string& target_sn) {
         return true;
     }
 }
-
 
 bool HikCamera::enableTrigger(TriggerType type, const std::string& source, int64_t activation) {
     trigger_type_ = type;

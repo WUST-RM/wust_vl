@@ -12,7 +12,19 @@
 #include <string>
 #include <thread>
 #include <vector>
+template<typename T>
+inline T fromVector(const std::vector<uint8_t>& data) {
+    T packet {};
+    std::memcpy(&packet, data.data(), sizeof(T));
+    return packet;
+}
 
+template<typename T>
+inline std::vector<uint8_t> toVector(const T& data) {
+    std::vector<uint8_t> packet(sizeof(T));
+    std::memcpy(packet.data(), &data, sizeof(T));
+    return packet;
+}
 class SerialDriver {
 public:
     using ReceiveCallback = std::function<void(const uint8_t* data, std::size_t len)>;

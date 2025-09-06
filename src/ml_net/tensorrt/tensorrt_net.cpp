@@ -205,8 +205,8 @@ struct TensorRTNet::Impl {
     nvinfer1::Dims input_dims_;
     nvinfer1::Dims output_dims_;
     cudaStream_t stream_;
-    const char *input_name_;
-    const char *output_name_;
+    const char* input_name_;
+    const char* output_name_;
 };
 TensorRTNet::TensorRTNet(): _impl(std::make_unique<Impl>()) {}
 TensorRTNet::~TensorRTNet() {

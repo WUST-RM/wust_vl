@@ -16,12 +16,11 @@ using PoseNode = Transform6D; //!< 位姿节点类型
 /**
  * @brief 坐标系类型
  */
-struct CoordFrame
-{
-    static std::string WORLD;  //!< 世界坐标系标识
+struct CoordFrame {
+    static std::string WORLD; //!< 世界坐标系标识
     static std::string CAMERA; //!< 相机坐标系标识
-    static std::string JOINT;  //!< 转轴坐标系标识
-    static std::string GYRO;   //!< 陀螺仪坐标系标识
+    static std::string JOINT; //!< 转轴坐标系标识
+    static std::string GYRO; //!< 陀螺仪坐标系标识
 };
 
 //! 世界坐标系

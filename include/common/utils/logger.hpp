@@ -11,6 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+// Copyright 2025 XiaoJian Wu
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// ...
+
 #pragma once
 
 #include <algorithm>
@@ -25,10 +30,9 @@
 #include <string>
 namespace fs = std::filesystem;
 
-// 日志等级定义
+// ========== 日志等级 ==========
 enum class LogLevel { DEBUG = 0, INFO, WARN, ERROR, MAIN };
 
-// 日志等级转字符串
 inline const char* levelToString(LogLevel level) {
     switch (level) {
         case LogLevel::MAIN:
@@ -46,19 +50,18 @@ inline const char* levelToString(LogLevel level) {
     }
 }
 
-// 日志颜色
 inline const char* colorForLevel(LogLevel level) {
     switch (level) {
         case LogLevel::MAIN:
             return "\033[37m"; // 白色
         case LogLevel::DEBUG:
-            return "\033[36m"; // Cyan
+            return "\033[36m"; // 青色
         case LogLevel::INFO:
-            return "\033[32m"; // Green
+            return "\033[32m"; // 绿色
         case LogLevel::WARN:
-            return "\033[33m"; // Yellow
+            return "\033[33m"; // 黄色
         case LogLevel::ERROR:
-            return "\033[31m"; // Red
+            return "\033[31m"; // 红色
         default:
             return "\033[0m";
     }
@@ -81,7 +84,6 @@ inline LogLevel logLevelFromString(const std::string& level_str) {
         return LogLevel::WARN;
     if (l == "ERROR")
         return LogLevel::ERROR;
-
     throw std::invalid_argument("Invalid log level string: " + level_str);
 }
 
@@ -97,7 +99,7 @@ inline std::string getTimeStr() {
     return oss.str();
 }
 
-// ========== 核心 Logger 类 ==========
+// ========== 核心 Logger ==========
 class Logger {
 public:
     static Logger& getInstance() {
@@ -108,7 +110,6 @@ public:
     void setLevel(const std::string& level_str) {
         setLevel(logLevelFromString(level_str));
     }
-
     void setLevel(LogLevel level) {
         log_level_ = level;
     }
@@ -122,7 +123,6 @@ public:
     void disableColorOutput() {
         color_output_enabled_ = false;
     }
-
     void enableSimplifiedOutput(bool enabled) {
         simplified_output_enabled_ = enabled;
     }
@@ -130,15 +130,12 @@ public:
     LogLevel getLevel() const {
         return log_level_;
     }
-
     bool shouldLog(LogLevel level) const {
         return level >= log_level_;
     }
-
     bool isSimplifiedOutputEnabled() const {
         return simplified_output_enabled_;
     }
-
     std::ofstream& fileStream() {
         return file_stream_;
     }
@@ -181,22 +178,23 @@ public:
         line_(line) {}
 
     ~LoggerStream() {
+        // 如果是流式抛异常，析构不输出
+        if (throwing_)
+            return;
+
         std::ostringstream full_msg;
         if (level_ == LogLevel::MAIN || !Logger::getInstance().isSimplifiedOutputEnabled()) {
-            // 始终使用完整格式
             full_msg << "[" << getTimeStr() << "]"
                      << "[" << levelToString(level_) << "]"
                      << "[" << node_name_ << "]"
                      << "[" << file_ << ":" << line_ << "] " << buffer_.str();
         } else {
-            // 简化格式
             full_msg << "[" << levelToString(level_) << "]"
                      << "[" << node_name_ << "] " << buffer_.str();
         }
 
         std::lock_guard<std::mutex> lock(Logger::getInstance().getMutex());
 
-        // 控制台输出（受日志等级影响）
         if (Logger::getInstance().shouldLog(level_)) {
             if (Logger::getInstance().isColorOutputEnabled()) {
                 std::cout << colorForLevel(level_) << full_msg.str() << colorReset() << std::endl;
@@ -205,7 +203,6 @@ public:
             }
         }
 
-        // 文件输出（不受等级限制）
         if (Logger::getInstance().isFileOutputEnabled()) {
             Logger::getInstance().fileStream() << full_msg.str() << std::endl;
         }
@@ -217,56 +214,18 @@ public:
         return *this;
     }
 
-private:
-    LogLevel level_;
-    std::ostringstream buffer_;
-    std::string node_name_;
-    const char* file_;
-    int line_;
-};
-
-// ========== 初始化接口 ==========
-inline void initLogger(
-    const std::string& level_str,
-    const std::string& log_dir = "./logs",
-    bool use_logcli = true,
-    bool use_logfile = true,
-    bool simplified_output = false
-) {
-    Logger& logger = Logger::getInstance();
-    logger.setLevel(logLevelFromString(level_str));
-    logger.enableSimplifiedOutput(simplified_output);
-
-    if (!use_logcli) {
-        logger.setLevel(LogLevel::ERROR);
+    // 新增流式抛异常方法
+    [[noreturn]] void throwError() {
+        throwing_ = true;
+        std::ostringstream full_msg;
+        full_msg << buffer_.str();
+        logAndThrow(full_msg.str(), node_name_, file_, line_);
     }
+    inline void
+    logAndThrow(const std::string& msg, const std::string& node, const char* file, int line) {
+        std::ostringstream oss;
+        oss << msg;
 
-    fs::path dir_path(log_dir);
-    if (!dir_path.is_absolute()) {
-        dir_path = fs::absolute(dir_path);
-    }
-
-    std::string timestamp = getTimeStr();
-    std::replace(timestamp.begin(), timestamp.end(), ':', '-');
-    std::replace(timestamp.begin(), timestamp.end(), ' ', '_');
-    fs::path filename = dir_path / ("log_" + timestamp + ".txt");
-    fs::create_directories(dir_path);
-
-    if (use_logfile) {
-        logger.enableFileOutput(filename.string());
-    }
-}
-inline void logAndThrow(
-    const std::string& msg,
-    const std::string& node,
-    const char* file,
-    int line
-) {
-    std::ostringstream oss;
-    oss << msg;
-
-    // 直接输出日志（等级 ERROR）
-    {
         std::lock_guard<std::mutex> lock(Logger::getInstance().getMutex());
         std::ostringstream full_msg;
         full_msg << "[" << getTimeStr() << "]"
@@ -284,15 +243,52 @@ inline void logAndThrow(
         if (Logger::getInstance().isFileOutputEnabled()) {
             Logger::getInstance().fileStream() << full_msg.str() << std::endl;
         }
+
+        throw std::runtime_error(oss.str());
     }
 
-    throw std::runtime_error(oss.str());
+private:
+    LogLevel level_;
+    std::ostringstream buffer_;
+    std::string node_name_;
+    const char* file_;
+    int line_;
+    bool throwing_ = false;
+};
+
+inline void initLogger(
+    const std::string& level_str,
+    const std::string& log_dir = "./logs",
+    bool use_logcli = true,
+    bool use_logfile = true,
+    bool simplified_output = false
+) {
+    Logger& logger = Logger::getInstance();
+    logger.setLevel(logLevelFromString(level_str));
+    logger.enableSimplifiedOutput(simplified_output);
+
+    if (!use_logcli)
+        logger.setLevel(LogLevel::ERROR);
+
+    fs::path dir_path(log_dir);
+    if (!dir_path.is_absolute())
+        dir_path = fs::absolute(dir_path);
+
+    std::string timestamp = getTimeStr();
+    std::replace(timestamp.begin(), timestamp.end(), ':', '-');
+    std::replace(timestamp.begin(), timestamp.end(), ' ', '_');
+    fs::path filename = dir_path / ("log_" + timestamp + ".txt");
+    fs::create_directories(dir_path);
+
+    if (use_logfile)
+        logger.enableFileOutput(filename.string());
 }
+
 // ========== 宏定义 ==========
 #define WUST_MAIN(node) LoggerStream(LogLevel::MAIN, node, __FILE__, __LINE__)
 #define WUST_DEBUG(node) LoggerStream(LogLevel::DEBUG, node, __FILE__, __LINE__)
 #define WUST_INFO(node) LoggerStream(LogLevel::INFO, node, __FILE__, __LINE__)
 #define WUST_WARN(node) LoggerStream(LogLevel::WARN, node, __FILE__, __LINE__)
 #define WUST_ERROR(node) LoggerStream(LogLevel::ERROR, node, __FILE__, __LINE__)
-#define WUST_THROW_ERROR(node, msg) \
-    logAndThrow((msg), (node), __FILE__, __LINE__)
+#define WUST_THROW_ERROR_STREAM(node) \
+    LoggerStream(LogLevel::ERROR, node, __FILE__, __LINE__).throwError()

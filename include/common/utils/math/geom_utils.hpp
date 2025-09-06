@@ -9,28 +9,22 @@
 
 #include <opencv2/core.hpp>
 
-#include "type_utils.hpp"
 #include "../logger.hpp"
+#include "type_utils.hpp"
 
 //! 角度制
-enum AngleMode : bool
-{
-    RAD = true,
-    DEG = false
-};
+enum AngleMode : bool { RAD = true, DEG = false };
 
 //! 欧拉角转轴枚举
-enum EulerAxis : int
-{
+enum EulerAxis : int {
     X = 0, //!< X 轴
     Y = 1, //!< Y 轴
-    Z = 2  //!< Z 轴
+    Z = 2 //!< Z 轴
 };
 
 // -------------------- 角度规范化函数 (取代宏) --------------------
-template <typename T>
-inline T NormalizeDegree(T degrees)
-{
+template<typename T>
+inline T NormalizeDegree(T degrees) {
     while (degrees > 180)
         degrees -= 360;
     while (degrees <= -180)
@@ -38,9 +32,8 @@ inline T NormalizeDegree(T degrees)
     return degrees;
 }
 
-template <typename T>
-inline T NormalizeRadian(T radians)
-{
+template<typename T>
+inline T NormalizeRadian(T radians) {
     while (radians > CV_PI)
         radians -= 2 * CV_PI;
     while (radians <= -CV_PI)
@@ -57,9 +50,8 @@ inline T NormalizeRadian(T radians)
  * @param[in] deg 角度
  * @return 弧度
  */
-template <typename Tp>
-inline Tp deg2rad(Tp deg)
-{
+template<typename Tp>
+inline Tp deg2rad(Tp deg) {
     return deg * static_cast<Tp>(CV_PI) / static_cast<Tp>(180);
 }
 
@@ -70,8 +62,10 @@ inline Tp deg2rad(Tp deg)
  * @param[in] rad 弧度
  * @return 角度
  */
-template <typename Tp>
-inline Tp rad2deg(Tp rad) { return rad * static_cast<Tp>(180) / static_cast<Tp>(CV_PI); }
+template<typename Tp>
+inline Tp rad2deg(Tp rad) {
+    return rad * static_cast<Tp>(180) / static_cast<Tp>(CV_PI);
+}
 
 /**
  * @brief Point类型转换为Matx类型
@@ -80,8 +74,10 @@ inline Tp rad2deg(Tp rad) { return rad * static_cast<Tp>(180) / static_cast<Tp>(
  * @param[in] point Point类型变量
  * @return Matx类型变量
  */
-template <typename Tp>
-inline cv::Matx<Tp, 3, 1> point2matx(cv::Point3_<Tp> point) { return cv::Matx<Tp, 3, 1>(point.x, point.y, point.z); }
+template<typename Tp>
+inline cv::Matx<Tp, 3, 1> point2matx(cv::Point3_<Tp> point) {
+    return cv::Matx<Tp, 3, 1>(point.x, point.y, point.z);
+}
 
 /**
  * @brief Matx类型转换为Point类型
@@ -90,8 +86,10 @@ inline cv::Matx<Tp, 3, 1> point2matx(cv::Point3_<Tp> point) { return cv::Matx<Tp
  * @param[in] matx Matx类型变量
  * @return Point类型变量
  */
-template <typename Tp>
-inline cv::Point3_<Tp> matx2point(cv::Matx<Tp, 3, 1> matx) { return cv::Point3_<Tp>(matx(0), matx(1), matx(2)); }
+template<typename Tp>
+inline cv::Point3_<Tp> matx2point(cv::Matx<Tp, 3, 1> matx) {
+    return cv::Point3_<Tp>(matx(0), matx(1), matx(2));
+}
 
 /**
  * @brief Matx类型转换为Vec类型
@@ -100,8 +98,10 @@ inline cv::Point3_<Tp> matx2point(cv::Matx<Tp, 3, 1> matx) { return cv::Point3_<
  * @param[in] matx Matx类型变量
  * @return Vec类型变量
  */
-template <typename Tp>
-inline cv::Vec<Tp, 3> matx2vec(cv::Matx<Tp, 3, 1> matx) { return cv::Vec<Tp, 3>(matx(0), matx(1), matx(2)); }
+template<typename Tp>
+inline cv::Vec<Tp, 3> matx2vec(cv::Matx<Tp, 3, 1> matx) {
+    return cv::Vec<Tp, 3>(matx(0), matx(1), matx(2));
+}
 
 // ------------------------【几何距离计算】------------------------
 
@@ -112,10 +112,8 @@ inline cv::Vec<Tp, 3> matx2vec(cv::Matx<Tp, 3, 1> matx) { return cv::Vec<Tp, 3>(
  * @param v2 第二个向量
  * @return 两个向量之间的距离
  */
-template <geom_utils_concepts::vector_2_type Vec1,
-          geom_utils_concepts::vector_2_type Vec2>
-inline auto getDist(const Vec1 &v1, const Vec2 &v2) noexcept
-{
+template<geom_utils_concepts::vector_2_type Vec1, geom_utils_concepts::vector_2_type Vec2>
+inline auto getDist(const Vec1& v1, const Vec2& v2) noexcept {
     using namespace geom_utils_concepts;
     const auto dx = get_x(v1) - get_x(v2);
     const auto dy = get_y(v1) - get_y(v2);
@@ -129,10 +127,8 @@ inline auto getDist(const Vec1 &v1, const Vec2 &v2) noexcept
  * @param v2 第二个三维向量
  * @return 两个三维向量之间的距离
  */
-template <geom_utils_concepts::vector_3_type Vec1,
-          geom_utils_concepts::vector_3_type Vec2>
-inline auto getDist(const Vec1 &v1, const Vec2 &v2) noexcept
-{
+template<geom_utils_concepts::vector_3_type Vec1, geom_utils_concepts::vector_3_type Vec2>
+inline auto getDist(const Vec1& v1, const Vec2& v2) noexcept {
     using namespace geom_utils_concepts;
     const auto dx = get_x(v1) - get_x(v2);
     const auto dy = get_y(v1) - get_y(v2);
@@ -147,9 +143,8 @@ inline auto getDist(const Vec1 &v1, const Vec2 &v2) noexcept
  * @param[in] v 向量
  * @return 向量在单位圆上的向量
  */
-template <typename Tp>
-inline cv::Point_<Tp> getUnitVector(const cv::Point_<Tp> &v)
-{
+template<typename Tp>
+inline cv::Point_<Tp> getUnitVector(const cv::Point_<Tp>& v) {
     return v / sqrt(v.x * v.x + v.y * v.y);
 }
 
@@ -162,10 +157,11 @@ inline cv::Point_<Tp> getUnitVector(const cv::Point_<Tp> &v)
  * @param[in] mode 角度模式，默认弧度制
  * @return 夹角大小,[0,180]
  */
-template <typename Tp1, typename Tp2>
-inline Tp1 getVectorMinAngle(const cv::Point_<Tp1> &v1, const cv::Point_<Tp2> &v2, AngleMode mode = RAD)
-{
-    Tp1 cos_theta = (v1.x * v2.x + v1.y * v2.y) / (std::sqrt(v1.x * v1.x + v1.y * v1.y) * std::sqrt(v2.x * v2.x + v2.y * v2.y));
+template<typename Tp1, typename Tp2>
+inline Tp1
+getVectorMinAngle(const cv::Point_<Tp1>& v1, const cv::Point_<Tp2>& v2, AngleMode mode = RAD) {
+    Tp1 cos_theta = (v1.x * v2.x + v1.y * v2.y)
+        / (std::sqrt(v1.x * v1.x + v1.y * v1.y) * std::sqrt(v2.x * v2.x + v2.y * v2.y));
     Tp1 theta = std::acos(cos_theta);
     if (std::isnan(theta))
         return Tp1(0);
@@ -179,29 +175,24 @@ inline Tp1 getVectorMinAngle(const cv::Point_<Tp1> &v1, const cv::Point_<Tp2> &v
  * @param[in] points 点集
  * @return 点集的整体方向，以 points[0] 指向 points[1] 为正方向
  */
-template <typename Tp>
-inline cv::Point2f getPointsDirectionVector(const std::vector<cv::Point_<Tp>> &points)
-{
-    cv::Point2f direction{};
-    if (points.size() <= 1)
-    {
+template<typename Tp>
+inline cv::Point2f getPointsDirectionVector(const std::vector<cv::Point_<Tp>>& points) {
+    cv::Point2f direction {};
+    if (points.size() <= 1) {
         return direction;
     }
 
     size_t half_size = points.size() / 2;
-    for (size_t i = 0; i < half_size; ++i)
-    {
+    for (size_t i = 0; i < half_size; ++i) {
         direction -= static_cast<cv::Point2f>(points[i]);
     }
-    for (size_t i = half_size + (points.size() % 2); i < points.size(); ++i)
-    {
+    for (size_t i = half_size + (points.size() % 2); i < points.size(); ++i) {
         direction += static_cast<cv::Point2f>(points[i]);
     }
 
     direction /= static_cast<float>(half_size * (half_size + (points.size() % 2)));
     float norm = std::sqrt(direction.x * direction.x + direction.y * direction.y);
-    if (norm > std::numeric_limits<float>::epsilon())
-    {
+    if (norm > std::numeric_limits<float>::epsilon()) {
         direction /= norm;
     }
 
@@ -219,9 +210,13 @@ inline cv::Point2f getPointsDirectionVector(const std::vector<cv::Point_<Tp>> &p
  * @return 交点坐标
  * @note 若两直线平行，返回 (std::numeric_limits<Tp>::quiet_NaN(), std::numeric_limits<Tp>::quiet_NaN())
  */
-template <typename Tp>
-inline cv::Point_<Tp> getLineIntersection(const cv::Point_<Tp> &p1, const cv::Point_<Tp> &p2, const cv::Point_<Tp> &p3, const cv::Point_<Tp> &p4)
-{
+template<typename Tp>
+inline cv::Point_<Tp> getLineIntersection(
+    const cv::Point_<Tp>& p1,
+    const cv::Point_<Tp>& p2,
+    const cv::Point_<Tp>& p3,
+    const cv::Point_<Tp>& p4
+) {
     Tp A1 = p2.y - p1.y;
     Tp B1 = p1.x - p2.x;
     Tp C1 = A1 * p1.x + B1 * p1.y;
@@ -232,9 +227,11 @@ inline cv::Point_<Tp> getLineIntersection(const cv::Point_<Tp> &p1, const cv::Po
 
     Tp delta = A1 * B2 - A2 * B1;
 
-    if (std::abs(delta) < std::numeric_limits<double>::epsilon())
-    {
-        return cv::Point_<Tp>(std::numeric_limits<Tp>::quiet_NaN(), std::numeric_limits<Tp>::quiet_NaN());
+    if (std::abs(delta) < std::numeric_limits<double>::epsilon()) {
+        return cv::Point_<Tp>(
+            std::numeric_limits<Tp>::quiet_NaN(),
+            std::numeric_limits<Tp>::quiet_NaN()
+        );
     }
     Tp x = static_cast<int>((B2 * C1 - B1 * C2) / delta);
     Tp y = static_cast<int>((A1 * C2 - A2 * C1) / delta);
@@ -250,19 +247,19 @@ inline cv::Point_<Tp> getLineIntersection(const cv::Point_<Tp> &p1, const cv::Po
  * @return 交点坐标
  * @note 若两直线平行，返回 (std::numeric_limits<Tp>::quiet_NaN(), std::numeric_limits<Tp>::quiet_NaN())
  */
-template <typename Tp1, typename Tp2>
-inline auto getLineIntersection(const cv::Vec<Tp1, 4> &line1, const cv::Vec<Tp2, 4> &line2)
-{
+template<typename Tp1, typename Tp2>
+inline auto getLineIntersection(const cv::Vec<Tp1, 4>& line1, const cv::Vec<Tp2, 4>& line2) {
     auto A1 = line1[1], B1 = -line1[0], C1 = line1[0] * line1[3] - line1[1] * line1[2];
     auto A2 = line2[1], B2 = -line2[0], C2 = line2[0] * line2[3] - line2[1] * line2[2];
-    if (auto delta = A1 * B2 - A2 * B1; std::abs(delta) < std::numeric_limits<decltype(delta)>::epsilon())
+    if (auto delta = A1 * B2 - A2 * B1;
+        std::abs(delta) < std::numeric_limits<decltype(delta)>::epsilon())
     {
         using ResultT = decltype((B1 * C2 - B2 * C1) / delta);
-        return cv::Point_<ResultT>(std::numeric_limits<ResultT>::quiet_NaN(),
-                                   std::numeric_limits<ResultT>::quiet_NaN());
-    }
-    else
-    {
+        return cv::Point_<ResultT>(
+            std::numeric_limits<ResultT>::quiet_NaN(),
+            std::numeric_limits<ResultT>::quiet_NaN()
+        );
+    } else {
         return cv::Point_((B1 * C2 - B2 * C1) / delta, (A2 * C1 - A1 * C2) / delta);
     }
 }
@@ -275,9 +272,8 @@ inline auto getLineIntersection(const cv::Vec<Tp1, 4> &line1, const cv::Vec<Tp2,
  * @param[in] v2 向量2
  * @return 向量1在向量2上的投影向量
  */
-template <typename Tp>
-inline cv::Point_<Tp> getProjectionVector(const cv::Point_<Tp> &v1, const cv::Point_<Tp> &v2)
-{
+template<typename Tp>
+inline cv::Point_<Tp> getProjectionVector(const cv::Point_<Tp>& v1, const cv::Point_<Tp>& v2) {
     return (v1.x * v2.x + v1.y * v2.y) / (v2.x * v2.x + v2.y * v2.y) * v2;
 }
 
@@ -289,9 +285,8 @@ inline cv::Point_<Tp> getProjectionVector(const cv::Point_<Tp> &v1, const cv::Po
  * @param[in] v2 向量2
  * @return 向量1在向量2上的投影长度
  */
-template <typename Tp>
-inline Tp getProjection(const cv::Point_<Tp> &v1, const cv::Point_<Tp> &v2)
-{
+template<typename Tp>
+inline Tp getProjection(const cv::Point_<Tp>& v1, const cv::Point_<Tp>& v2) {
     return (v1.x * v2.x + v1.y * v2.y) / sqrt(v2.x * v2.x + v2.y * v2.y);
 }
 
@@ -302,10 +297,8 @@ inline Tp getProjection(const cv::Point_<Tp> &v1, const cv::Point_<Tp> &v2)
  * @param v2 第二个向量
  * @return 外积结果 , 若 retval = 0,则共线
  */
-template <geom_utils_concepts::vector_2_type Vec1,
-          geom_utils_concepts::vector_2_type Vec2>
-inline auto getCross(const Vec1 &v1, const Vec2 &v2) noexcept
-{
+template<geom_utils_concepts::vector_2_type Vec1, geom_utils_concepts::vector_2_type Vec2>
+inline auto getCross(const Vec1& v1, const Vec2& v2) noexcept {
     using namespace geom_utils_concepts;
     const auto v1_x = get_x(v1);
     const auto v1_y = get_y(v1);
@@ -322,21 +315,19 @@ inline auto getCross(const Vec1 &v1, const Vec2 &v2) noexcept
  * @param[in] axis 转轴
  * @return Matx 格式的旋转矩阵
  */
-template <typename _Tp>
-inline cv::Matx<_Tp, 3, 3> euler2Mat(_Tp val, EulerAxis axis)
-{
+template<typename _Tp>
+inline cv::Matx<_Tp, 3, 3> euler2Mat(_Tp val, EulerAxis axis) {
     _Tp s = std::sin(val), c = std::cos(val);
-    switch (axis)
-    {
-    case X:
-        return {1, 0, 0, 0, c, -s, 0, s, c};
-    case Y:
-        return {c, 0, s, 0, 1, 0, -s, 0, c};
-    case Z:
-        return {c, -s, 0, s, c, 0, 0, 0, 1};
-    default:
-        //WUST_THROW_ERROR("euler2Mat","Bad argument of the \"axis\": %d", static_cast<int>(axis));
-        return cv::Matx<_Tp, 3, 3>::eye();
+    switch (axis) {
+        case X:
+            return { 1, 0, 0, 0, c, -s, 0, s, c };
+        case Y:
+            return { c, 0, s, 0, 1, 0, -s, 0, c };
+        case Z:
+            return { c, -s, 0, s, c, 0, 0, 0, 1 };
+        default:
+            //WUST_THROW_ERROR("euler2Mat","Bad argument of the \"axis\": %d", static_cast<int>(axis));
+            return cv::Matx<_Tp, 3, 3>::eye();
     }
 }
 
@@ -346,15 +337,17 @@ inline cv::Matx<_Tp, 3, 3> euler2Mat(_Tp val, EulerAxis axis)
  * @param[in] LineA 直线1(两点式表示法)
  * @param[in] LineB 直线2（两点式表示法）
  */
-template <typename Tp1, typename Tp2>
-inline cv::Point2f getCrossPoint(const cv::Vec<Tp1, 4> &LineA, const cv::Vec<Tp2, 4> &LineB)
-{
+template<typename Tp1, typename Tp2>
+inline cv::Point2f getCrossPoint(const cv::Vec<Tp1, 4>& LineA, const cv::Vec<Tp2, 4>& LineB) {
     double ka, kb;
     ka = static_cast<double>(LineA[3] - LineA[1]) / static_cast<double>(LineA[2] - LineA[0]);
     kb = static_cast<double>(LineB[3] - LineB[1]) / static_cast<double>(LineB[2] - LineB[0]);
     cv::Point2f crossPoint;
-    crossPoint.x = static_cast<float>((ka * LineA[0] - LineA[1] - kb * LineB[0] + LineB[1]) / (ka - kb));
-    crossPoint.y = static_cast<float>((ka * kb * (LineA[0] - LineB[0]) + ka * LineB[1] - kb * LineA[1]) / (ka - kb));
+    crossPoint.x =
+        static_cast<float>((ka * LineA[0] - LineA[1] - kb * LineB[0] + LineB[1]) / (ka - kb));
+    crossPoint.y = static_cast<float>(
+        (ka * kb * (LineA[0] - LineB[0]) + ka * LineB[1] - kb * LineA[1]) / (ka - kb)
+    );
     return crossPoint;
 }
 
@@ -376,12 +369,10 @@ inline cv::Point2f getCrossPoint(const cv::Vec<Tp1, 4> &LineA, const cv::Vec<Tp2
  *   参数一致）\f[l:y-y_0=\frac{v_y}{v_x}(x-x_0)\f]
  * @return 平面欧式距离
  */
-template <typename Tp1, typename Tp2>
-inline auto getDist(const cv::Vec<Tp1, 4> &line, const cv::Point_<Tp2> &pt, bool direc = true)
-{
-    auto retval = (line(1) * pt.x - line(0) * pt.y +
-                   line(0) * line(3) - line(1) * line(2)) /
-                  std::sqrt(line(0) * line(0) + line(1) * line(1));
+template<typename Tp1, typename Tp2>
+inline auto getDist(const cv::Vec<Tp1, 4>& line, const cv::Point_<Tp2>& pt, bool direc = true) {
+    auto retval = (line(1) * pt.x - line(0) * pt.y + line(0) * line(3) - line(1) * line(2))
+        / std::sqrt(line(0) * line(0) + line(1) * line(1));
     return direc ? retval : std::abs(retval);
 }
 
@@ -391,8 +382,7 @@ inline auto getDist(const cv::Vec<Tp1, 4> &line, const cv::Point_<Tp2> &pt, bool
  * @param[in] yaw 陀螺仪 yaw 数据 (左负右正)
  * @param[in] pitch 陀螺仪 pitch 数据 (上负下正)
  */
-template <typename _Tp>
-inline cv::Matx<_Tp, 3, 3> gyroEuler2RotMat(_Tp yaw, _Tp pitch)
-{
+template<typename _Tp>
+inline cv::Matx<_Tp, 3, 3> gyroEuler2RotMat(_Tp yaw, _Tp pitch) {
     return euler2Mat(deg2rad(yaw), Y) * euler2Mat(deg2rad(-1 * pitch), X);
 }
