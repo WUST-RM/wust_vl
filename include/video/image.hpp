@@ -27,7 +27,7 @@ struct ImageFrame {
     std::chrono::steady_clock::time_point timestamp;
 };
 
-inline cv::Mat convertToMat(const ImageFrame& frame,bool use_raw = false) {
+inline cv::Mat convertToMat(const ImageFrame& frame, bool use_raw = false) {
     if (frame.data.empty()) {
         return cv::Mat();
     }
@@ -43,7 +43,7 @@ inline cv::Mat convertToMat(const ImageFrame& frame,bool use_raw = false) {
 
     // 转换为 BGR
     cv::Mat bgr_img;
-    if (use_raw||frame.pixel_type<0) {
+    if (use_raw || frame.pixel_type < 0) {
         bgr_img = bayer_img.clone();
     } else {
         cv::cvtColor(bayer_img, bgr_img, frame.pixel_type);

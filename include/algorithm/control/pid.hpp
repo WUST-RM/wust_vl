@@ -1,9 +1,9 @@
 
 #pragma once
 
-#include <cmath>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <stdexcept>
 
 namespace wust_vl_algorithm {
@@ -14,34 +14,56 @@ public:
     // Constructor:
     // Kp, Ki, Kd: proportional/integral/derivative gains
     // dt_seconds: optional fixed sample time (if <= 0, you must pass dt to update())
-    explicit PID(T Kp = T(0), T Ki = T(0), T Kd = T(0), T dt_seconds = T(-1))
-        : kp(Kp), ki(Ki), kd(Kd), dt_fixed(dt_seconds),
-          out_min(-std::numeric_limits<T>::infinity()),
-          out_max(std::numeric_limits<T>::infinity()),
-          integrator(T(0)), prev_error(T(0)), prev_meas(T(0)),
-          deriv_filtered(T(0)), tau(T(0.01)), // default small filter time constant
-          integ_limit(std::numeric_limits<T>::infinity()),
-          anti_windup_gain(T(0.0)),
-          setpoint_weight_p(T(1.0)), setpoint_weight_d(T(1.0)),
-          derivative_on_measurement(false),
-          first_update(true)
-    {}
+    explicit PID(T Kp = T(0), T Ki = T(0), T Kd = T(0), T dt_seconds = T(-1)):
+        kp(Kp),
+        ki(Ki),
+        kd(Kd),
+        dt_fixed(dt_seconds),
+        out_min(-std::numeric_limits<T>::infinity()),
+        out_max(std::numeric_limits<T>::infinity()),
+        integrator(T(0)),
+        prev_error(T(0)),
+        prev_meas(T(0)),
+        deriv_filtered(T(0)),
+        tau(T(0.01)), // default small filter time constant
+        integ_limit(std::numeric_limits<T>::infinity()),
+        anti_windup_gain(T(0.0)),
+        setpoint_weight_p(T(1.0)),
+        setpoint_weight_d(T(1.0)),
+        derivative_on_measurement(false),
+        first_update(true) {}
 
     // --- setters ---
-    void setGains(T Kp, T Ki, T Kd) { kp = Kp; ki = Ki; kd = Kd; }
-    void setOutputLimits(T lo, T hi) { out_min = lo; out_max = hi; }
-    void setIntegratorLimit(T abs_limit) { integ_limit = std::abs(abs_limit); }
+    void setGains(T Kp, T Ki, T Kd) {
+        kp = Kp;
+        ki = Ki;
+        kd = Kd;
+    }
+    void setOutputLimits(T lo, T hi) {
+        out_min = lo;
+        out_max = hi;
+    }
+    void setIntegratorLimit(T abs_limit) {
+        integ_limit = std::abs(abs_limit);
+    }
     void setDerivativeFilterTau(T tau_seconds) {
-        if (tau_seconds < T(0)) throw std::invalid_argument("tau must be >= 0");
+        if (tau_seconds < T(0))
+            throw std::invalid_argument("tau must be >= 0");
         tau = tau_seconds;
     }
-    void setAntiWindupGain(T kw) { anti_windup_gain = kw; } // 0 = clamping-only behavior; >0 enables back-calculation
+    void setAntiWindupGain(T kw) {
+        anti_windup_gain = kw;
+    } // 0 = clamping-only behavior; >0 enables back-calculation
     void setSetpointWeighting(T wp, T wd = T(1.0)) {
         setpoint_weight_p = wp;
         setpoint_weight_d = wd;
     }
-    void setDerivativeOnMeasurement(bool on) { derivative_on_measurement = on; }
-    void setFixedDt(T dt_seconds) { dt_fixed = dt_seconds; }
+    void setDerivativeOnMeasurement(bool on) {
+        derivative_on_measurement = on;
+    }
+    void setFixedDt(T dt_seconds) {
+        dt_fixed = dt_seconds;
+    }
 
     // Reset internal state
     void reset() {
@@ -57,8 +79,10 @@ public:
     // Returns control output (clamped to output limits).
     T update(T setpoint, T measurement, T dt_seconds = T(-1)) {
         T dt = dt_seconds;
-        if (dt <= T(0)) dt = dt_fixed;
-        if (dt <= T(0)) throw std::invalid_argument("dt must be > 0 (either pass dt or set fixed dt)");
+        if (dt <= T(0))
+            dt = dt_fixed;
+        if (dt <= T(0))
+            throw std::invalid_argument("dt must be > 0 (either pass dt or set fixed dt)");
 
         // compute error
         T error = setpoint - measurement;
@@ -72,8 +96,10 @@ public:
         integrator += ki * error * dt;
         // integrator clamping (hard limit)
         if (integ_limit < std::numeric_limits<T>::infinity()) {
-            if (integrator > integ_limit) integrator = integ_limit;
-            else if (integrator < -integ_limit) integrator = -integ_limit;
+            if (integrator > integ_limit)
+                integrator = integ_limit;
+            else if (integrator < -integ_limit)
+                integrator = -integ_limit;
         }
 
         // Derivative (with filtering)
@@ -98,7 +124,9 @@ public:
         T alpha = (tau > T(0)) ? (tau / (tau + dt)) : T(0);
         deriv_filtered = alpha * deriv_filtered + (T(1) - alpha) * raw_deriv;
 
-        T D = kd * (setpoint_weight_d * deriv_filtered); // apply D gain and optional setpoint weighting for derivative
+        T D = kd
+            * (setpoint_weight_d * deriv_filtered
+            ); // apply D gain and optional setpoint weighting for derivative
 
         // Unsaturated output
         T u_unsat = P + integrator + D;
@@ -113,8 +141,10 @@ public:
             integrator += anti_windup_gain * (u_sat - u_unsat) * dt;
             // re-clamp integrator after back-calculation
             if (integ_limit < std::numeric_limits<T>::infinity()) {
-                if (integrator > integ_limit) integrator = integ_limit;
-                else if (integrator < -integ_limit) integrator = -integ_limit;
+                if (integrator > integ_limit)
+                    integrator = integ_limit;
+                else if (integrator < -integ_limit)
+                    integrator = -integ_limit;
             }
             // Recompute output (optional)
             u_unsat = P + integrator + D;
@@ -131,11 +161,21 @@ public:
     }
 
     // Accessors (read-only)
-    T getP() const { return kp; }
-    T getI() const { return ki; }
-    T getD() const { return kd; }
-    T getIntegrator() const { return integrator; }
-    T getDerivative() const { return deriv_filtered; }
+    T getP() const {
+        return kp;
+    }
+    T getI() const {
+        return ki;
+    }
+    T getD() const {
+        return kd;
+    }
+    T getIntegrator() const {
+        return integrator;
+    }
+    T getDerivative() const {
+        return deriv_filtered;
+    }
 
 private:
     // Gains
@@ -173,4 +213,4 @@ private:
     bool first_update;
 };
 
-} // namespace util
+} // namespace wust_vl_algorithm

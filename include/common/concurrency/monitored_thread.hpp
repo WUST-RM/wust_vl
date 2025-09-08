@@ -9,6 +9,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+namespace wust_vl_concurrency {
 class MonitoredThread: public std::enable_shared_from_this<MonitoredThread> {
 public:
     enum class Status { Running, Stopped, Hung, Paused };
@@ -184,3 +185,5 @@ private:
     std::mutex mtx_;
     std::map<std::string, std::weak_ptr<MonitoredThread>> threads_;
 };
+
+}

@@ -11,10 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-// Copyright 2025 XiaoJian Wu
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// ...
 
 #pragma once
 
@@ -178,9 +174,12 @@ public:
         line_(line) {}
 
     ~LoggerStream() {
-        // 如果是流式抛异常，析构不输出
-        if (throwing_)
-            return;
+        if (throwing_) {
+            std::ostringstream full_msg;
+            full_msg << buffer_.str();
+            logAndThrow(full_msg.str(), node_name_, file_, line_);
+            return; // logAndThrow 内部会 throw
+        }
 
         std::ostringstream full_msg;
         if (level_ == LogLevel::MAIN || !Logger::getInstance().isSimplifiedOutputEnabled()) {
@@ -214,24 +213,21 @@ public:
         return *this;
     }
 
-    // 新增流式抛异常方法
-    [[noreturn]] void throwError() {
+    // 支持流式抛异常
+    LoggerStream& throwError() {
         throwing_ = true;
-        std::ostringstream full_msg;
-        full_msg << buffer_.str();
-        logAndThrow(full_msg.str(), node_name_, file_, line_);
+        return *this;
     }
-    inline void
-    logAndThrow(const std::string& msg, const std::string& node, const char* file, int line) {
-        std::ostringstream oss;
-        oss << msg;
 
-        std::lock_guard<std::mutex> lock(Logger::getInstance().getMutex());
+private:
+    void logAndThrow(const std::string& msg, const std::string& node, const char* file, int line) {
         std::ostringstream full_msg;
         full_msg << "[" << getTimeStr() << "]"
                  << "[ERROR]"
                  << "[" << node << "]"
-                 << "[" << file << ":" << line << "] " << oss.str();
+                 << "[" << file << ":" << line << "] " << msg;
+
+        std::lock_guard<std::mutex> lock(Logger::getInstance().getMutex());
 
         if (Logger::getInstance().isColorOutputEnabled()) {
             std::cerr << colorForLevel(LogLevel::ERROR) << full_msg.str() << colorReset()
@@ -244,10 +240,9 @@ public:
             Logger::getInstance().fileStream() << full_msg.str() << std::endl;
         }
 
-        throw std::runtime_error(oss.str());
+        throw std::runtime_error(msg);
     }
 
-private:
     LogLevel level_;
     std::ostringstream buffer_;
     std::string node_name_;
@@ -290,5 +285,4 @@ inline void initLogger(
 #define WUST_INFO(node) LoggerStream(LogLevel::INFO, node, __FILE__, __LINE__)
 #define WUST_WARN(node) LoggerStream(LogLevel::WARN, node, __FILE__, __LINE__)
 #define WUST_ERROR(node) LoggerStream(LogLevel::ERROR, node, __FILE__, __LINE__)
-#define WUST_THROW_ERROR_STREAM(node) \
-    LoggerStream(LogLevel::ERROR, node, __FILE__, __LINE__).throwError()
+#define WUST_THROW_ERROR(node) LoggerStream(LogLevel::ERROR, node, __FILE__, __LINE__).throwError()

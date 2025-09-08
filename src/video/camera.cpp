@@ -13,7 +13,7 @@ struct Camera::Impl {
                     WUST_ERROR("camera") << "Camera initialization failed.";
                     return false;
                 }
-                hik_use_raw_=config_["hik_camera"]["use_raw"].as<bool>(false);
+                hik_use_raw_ = config_["hik_camera"]["use_raw"].as<bool>(false);
                 hik_camera_->setParameters(
                     config["hik_camera"]["acquisition_frame_rate"].as<int>(),
                     config["hik_camera"]["exposure_time"].as<int>(),
@@ -59,8 +59,8 @@ struct Camera::Impl {
     }
     void setFrameCallback(std::function<void(ImageFrame&)> cb) {
         if (hik_camera_) {
-            std::function<void(ImageFrame&)> real_cb = [this,cb](ImageFrame& frame) {
-                frame.src_img = convertToMat(frame,hik_use_raw_);
+            std::function<void(ImageFrame&)> real_cb = [this, cb](ImageFrame& frame) {
+                frame.src_img = convertToMat(frame, hik_use_raw_);
                 cb(frame);
             };
             hik_camera_->setFrameCallback(real_cb);

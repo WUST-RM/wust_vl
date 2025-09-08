@@ -54,7 +54,7 @@ HikCamera::~HikCamera() {
     }
     if (capture_thread_) {
         capture_thread_->stop();
-        ThreadManager::instance().unregisterThread(capture_thread_->getName());
+        wust_vl_concurrency::ThreadManager::instance().unregisterThread(capture_thread_->getName());
     }
     if (camera_handle_) {
         MV_CC_StopGrabbing(camera_handle_);
@@ -283,13 +283,13 @@ void HikCamera::startCamera(bool if_recorder) {
         expected_height_ = stParam.nCurValue;
     }
     if (trigger_type_ != TriggerType::Software) {
-        capture_thread_ = MonitoredThread::create(
+        capture_thread_ = wust_vl_concurrency::MonitoredThread::create(
             "HikCaptureThread",
-            [this](std::shared_ptr<MonitoredThread> self) { this->hikCaptureLoop(self); }
+            [this](std::shared_ptr<wust_vl_concurrency::MonitoredThread> self) { this->hikCaptureLoop(self); }
         );
 
         // 注册到全局管理器
-        ThreadManager::instance().registerThread(capture_thread_);
+        wust_vl_concurrency::ThreadManager::instance().registerThread(capture_thread_);
     }
 
     if (if_recorder) {
@@ -383,7 +383,7 @@ bool HikCamera::restartCamera() {
     return true;
 }
 
-void HikCamera::hikCaptureLoop(std::shared_ptr<MonitoredThread> self) {
+void HikCamera::hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThread> self) {
     MV_FRAME_OUT out_frame;
     WUST_INFO(hik_logger_) << "Starting image capture loop!";
 
@@ -403,22 +403,9 @@ void HikCamera::hikCaptureLoop(std::shared_ptr<MonitoredThread> self) {
                 ++frame_counter;
 
                 ImageFrame frame;
-
-                // frame.width = out_frame.stFrameInfo.nWidth;
-                // frame.height = out_frame.stFrameInfo.nHeight;
-                // frame.step = frame.width * 3;
-
-                // frame.data.resize(frame.width * frame.height * 3);
                 frame.width = out_frame.stFrameInfo.nWidth;
                 frame.height = out_frame.stFrameInfo.nHeight;
                 frame.data.resize(out_frame.stFrameInfo.nFrameLen);
-                // convert_param_.pDstBuffer = frame.data.data();
-                // convert_param_.nDstBufferSize = static_cast<int>(frame.data.size());
-                // convert_param_.pSrcData = out_frame.pBufAddr;
-                // convert_param_.nSrcDataLen = out_frame.stFrameInfo.nFrameLen;
-                // convert_param_.enSrcPixelType = out_frame.stFrameInfo.enPixelType;
-
-                // MV_CC_ConvertPixelType(camera_handle_, &convert_param_);
                 std::memcpy(frame.data.data(), out_frame.pBufAddr, out_frame.stFrameInfo.nFrameLen);
                 const auto& frame_info = out_frame.stFrameInfo;
                 auto pixel_type = frame_info.enPixelType;
@@ -545,21 +532,9 @@ bool HikCamera::read() {
     }
 
     ImageFrame frame;
-    // frame.width = out_frame.stFrameInfo.nWidth;
-    // frame.height = out_frame.stFrameInfo.nHeight;
-    // frame.step = frame.width * 3;
-
-    // frame.data.resize(frame.width * frame.height * 3);
     frame.width = out_frame.stFrameInfo.nWidth;
     frame.height = out_frame.stFrameInfo.nHeight;
     frame.data.resize(out_frame.stFrameInfo.nFrameLen);
-    // convert_param_.pDstBuffer = frame.data.data();
-    // convert_param_.nDstBufferSize = static_cast<int>(frame.data.size());
-    // convert_param_.pSrcData = out_frame.pBufAddr;
-    // convert_param_.nSrcDataLen = out_frame.stFrameInfo.nFrameLen;
-    // convert_param_.enSrcPixelType = out_frame.stFrameInfo.enPixelType;
-
-    // MV_CC_ConvertPixelType(camera_handle_, &convert_param_);
     std::memcpy(frame.data.data(), out_frame.pBufAddr, out_frame.stFrameInfo.nFrameLen);
     const auto& frame_info = out_frame.stFrameInfo;
     auto pixel_type = frame_info.enPixelType;
@@ -618,21 +593,9 @@ ImageFrame HikCamera::readImage() {
     }
 
     ImageFrame frame;
-    // frame.width = out_frame.stFrameInfo.nWidth;
-    // frame.height = out_frame.stFrameInfo.nHeight;
-    // frame.step = frame.width * 3;
-
-    // frame.data.resize(frame.width * frame.height * 3);
     frame.width = out_frame.stFrameInfo.nWidth;
     frame.height = out_frame.stFrameInfo.nHeight;
     frame.data.resize(out_frame.stFrameInfo.nFrameLen);
-    // convert_param_.pDstBuffer = frame.data.data();
-    // convert_param_.nDstBufferSize = static_cast<int>(frame.data.size());
-    // convert_param_.pSrcData = out_frame.pBufAddr;
-    // convert_param_.nSrcDataLen = out_frame.stFrameInfo.nFrameLen;
-    // convert_param_.enSrcPixelType = out_frame.stFrameInfo.enPixelType;
-
-    // MV_CC_ConvertPixelType(camera_handle_, &convert_param_);
     std::memcpy(frame.data.data(), out_frame.pBufAddr, out_frame.stFrameInfo.nFrameLen);
     const auto& frame_info = out_frame.stFrameInfo;
     auto pixel_type = frame_info.enPixelType;

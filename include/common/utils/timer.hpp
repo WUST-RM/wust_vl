@@ -27,7 +27,7 @@ public:
         callback_ = std::move(callback);
 
         thread_ =
-            MonitoredThread::create("TimerThread", [this](std::shared_ptr<MonitoredThread> self) {
+            wust_vl_concurrency::MonitoredThread::create("TimerThread", [this](std::shared_ptr<wust_vl_concurrency::MonitoredThread> self) {
                 auto next_time = std::chrono::steady_clock::now() + interval_;
                 auto last_time = std::chrono::steady_clock::now();
 
@@ -54,8 +54,7 @@ public:
                 }
             });
 
-        // 注册到全局管理器
-        ThreadManager::instance().registerThread(thread_);
+        wust_vl_concurrency::ThreadManager::instance().registerThread(thread_);
 
         running_ = true;
     }
@@ -64,7 +63,7 @@ public:
         running_ = false;
         if (thread_) {
             thread_->stop();
-            ThreadManager::instance().unregisterThread(thread_->getName());
+            wust_vl_concurrency::ThreadManager::instance().unregisterThread(thread_->getName());
         }
     }
 
@@ -75,7 +74,7 @@ public:
 private:
     std::chrono::microseconds interval_;
     Callback callback_;
-    std::shared_ptr<MonitoredThread> thread_;
+    std::shared_ptr<wust_vl_concurrency::MonitoredThread> thread_;
     bool running_ = false;
 };
 namespace time_utils {

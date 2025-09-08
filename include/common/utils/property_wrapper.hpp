@@ -1,14 +1,9 @@
-/**
- * @file property_wrapper.hpp
- * @author 张峰玮 (3480409161@qq.com)
- * @brief 属性包装类与相关宏定义
- * @date 2025-7-15
- */
 
 #pragma once
 
 #include "logger.hpp"
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 /**
@@ -55,7 +50,7 @@ public:
      */
     [[nodiscard]] const WrapperType& getValue() const {
         if (!_has_value)
-            WUST_THROW_ERROR("PropertyWrapper", "属性未设置");
+            WUST_THROW_ERROR("PropertyWrapper") << "属性未设置";
         return _value;
     }
 
@@ -67,7 +62,7 @@ public:
      */
     WrapperType& getValue() {
         if (!_has_value)
-            WUST_THROW_ERROR("PropertyWrapper", "属性未设置");
+            WUST_THROW_ERROR("PropertyWrapper") << "属性未设置";
         return _value;
     }
 
@@ -165,4 +160,31 @@ private: \
     } \
     void clear##PROPERTY_NAME() noexcept { \
         _##PROPERTY_NAME##_prop.clearValue(); \
+    }
+
+/**
+ * @brief 定义必选属性宏
+ *
+ * @param PROPERTY_NAME 属性名
+ * @param READ_SCOPE 读取访问权限
+ * @param WRITE_SCOPE 写入访问权限
+ * @param TYPE 属性类型
+ *
+ * @note 属性必须在构造函数中初始化，不可为空
+ */
+#define DEFINE_REQUIRED_PROPERTY(PROPERTY_NAME, READ_SCOPE, WRITE_SCOPE, TYPE) \
+private: \
+    using _##PROPERTY_NAME##_type = PROPERTY_WRAPPER_EXPAND_PARAMS TYPE; \
+    _##PROPERTY_NAME##_type _##PROPERTY_NAME {}; \
+    READ_SCOPE: \
+    const _##PROPERTY_NAME##_type& get##PROPERTY_NAME() const noexcept { \
+        return _##PROPERTY_NAME; \
+    } \
+    _##PROPERTY_NAME##_type& get##PROPERTY_NAME() noexcept { \
+        return _##PROPERTY_NAME; \
+    } \
+    WRITE_SCOPE: \
+    template<typename U> \
+    void set##PROPERTY_NAME(U&& value) { \
+        _##PROPERTY_NAME = std::forward<U>(value); \
     }

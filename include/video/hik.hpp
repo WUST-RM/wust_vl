@@ -51,13 +51,13 @@ public:
     ImageFrame readImage();
 
 private:
-    void hikCaptureLoop(std::shared_ptr<MonitoredThread> self);
+    void hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThread> self);
 
     void* camera_handle_;
     int fail_count_;
     MV_IMAGE_BASIC_INFO img_info_;
     MV_CC_PIXEL_CONVERT_PARAM convert_param_;
-    std::shared_ptr<MonitoredThread> capture_thread_;
+    std::shared_ptr<wust_vl_concurrency::MonitoredThread> capture_thread_;
     std::string hik_logger_ = "hik_camera";
     double last_frame_rate_, last_exposure_time_, last_gain_, last_gamma_;
     bool last_acquisition_frame_rate_enable_;
