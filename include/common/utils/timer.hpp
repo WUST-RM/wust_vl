@@ -26,8 +26,9 @@ public:
         interval_ = std::chrono::microseconds(static_cast<int64_t>(1e6 / rate_hz));
         callback_ = std::move(callback);
 
-        thread_ =
-            wust_vl_concurrency::MonitoredThread::create("TimerThread", [this](std::shared_ptr<wust_vl_concurrency::MonitoredThread> self) {
+        thread_ = wust_vl_concurrency::MonitoredThread::create(
+            "TimerThread",
+            [this](std::shared_ptr<wust_vl_concurrency::MonitoredThread> self) {
                 auto next_time = std::chrono::steady_clock::now() + interval_;
                 auto last_time = std::chrono::steady_clock::now();
 
@@ -52,7 +53,8 @@ public:
 
                     next_time += interval_;
                 }
-            });
+            }
+        );
 
         wust_vl_concurrency::ThreadManager::instance().registerThread(thread_);
 

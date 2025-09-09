@@ -1,23 +1,13 @@
 #pragma once
+#include <Eigen/Geometry>
+#include <algorithm>
 #include <array>
+#include <chrono>
+#include <cmath>
 #include <mutex>
+#include <optional>
+#include <shared_mutex>
 #include <vector>
-#include <optional>
-#include <shared_mutex>
-#include <chrono>
-#include <algorithm>
-#include <cmath>
-#include <Eigen/Geometry>
-
-#include <chrono>
-#include <array>
-#include <optional>
-#include <shared_mutex>
-#include <algorithm>
-#include <type_traits>
-#include <Eigen/Dense>
-#include <Eigen/Geometry>
-#include <cmath>
 
 // 🔹 默认 MotionTraits
 template<typename T, typename Enable = void>
@@ -33,30 +23,36 @@ template<>
 struct MotionTraits<Eigen::Quaterniond> {
     static void unwrap(const Eigen::Quaterniond& prev, Eigen::Quaterniond& curr) {
         // 确保四元数连续（避免跳反）
-        if (prev.dot(curr) < 0.0) curr.coeffs() *= -1.0;
+        if (prev.dot(curr) < 0.0)
+            curr.coeffs() *= -1.0;
     }
 
-    static Eigen::Quaterniond interpolate(const Eigen::Quaterniond& a,
-                                          const Eigen::Quaterniond& b,
-                                          double t) {
+    static Eigen::Quaterniond
+    interpolate(const Eigen::Quaterniond& a, const Eigen::Quaterniond& b, double t) {
         return a.slerp(t, b);
     }
 };
 
 // 🔹 辅助 SFINAE 检查
 template<typename T, typename = void>
-struct has_motion_traits : std::false_type {};
+struct has_motion_traits: std::false_type {};
 
 template<typename T>
-struct has_motion_traits<T, std::void_t<
-    decltype(MotionTraits<T>::unwrap(std::declval<const T&>(), std::declval<T&>())),
-    decltype(MotionTraits<T>::interpolate(std::declval<const T&>(), std::declval<const T&>(), 0.0))
->> : std::true_type {};
+struct has_motion_traits<
+    T,
+    std::void_t<
+        decltype(MotionTraits<T>::unwrap(std::declval<const T&>(), std::declval<T&>())),
+        decltype(MotionTraits<
+                 T>::interpolate(std::declval<const T&>(), std::declval<const T&>(), 0.0))>>:
+    std::true_type {};
 
 // 🔹 通用 MotionBufferGeneric
 template<typename T, size_t BUFFER_SIZE = 512>
 class MotionBufferGeneric {
-    static_assert(has_motion_traits<T>::value, "MotionTraits<T> must exist with unwrap() and interpolate()");
+    static_assert(
+        has_motion_traits<T>::value,
+        "MotionTraits<T> must exist with unwrap() and interpolate()"
+    );
 
 public:
     using TimePoint = std::chrono::steady_clock::time_point;
@@ -76,7 +72,8 @@ public:
         time_buffer_[head_] = stamp;
 
         head_ = (head_ + 1) % BUFFER_SIZE;
-        if (size_ < BUFFER_SIZE) ++size_;
+        if (size_ < BUFFER_SIZE)
+            ++size_;
 
         last_ = buffer_[(head_ + BUFFER_SIZE - 1) % BUFFER_SIZE];
         has_last_ = true;
@@ -84,7 +81,8 @@ public:
 
     std::optional<Stamped> get_interpolated(TimePoint t_query) const {
         std::shared_lock lock(mutex_);
-        if (size_ < 2) return std::nullopt;
+        if (size_ < 2)
+            return std::nullopt;
 
         size_t begin = (head_ + BUFFER_SIZE - size_) % BUFFER_SIZE;
 
@@ -103,19 +101,21 @@ public:
         const auto& hi = buffer_[(begin + idx_hi) % BUFFER_SIZE];
 
         double span = std::chrono::duration<double>(hi.stamp - lo.stamp).count();
-        if (span <= 0.0) return lo;
+        if (span <= 0.0)
+            return lo;
 
         double t = std::chrono::duration<double>(t_query - lo.stamp).count() / span;
 
         Stamped res;
-        res.data  = MotionTraits<T>::interpolate(lo.data, hi.data, t);
+        res.data = MotionTraits<T>::interpolate(lo.data, hi.data, t);
         res.stamp = t_query;
         return res;
     }
 
     std::optional<Stamped> get_last() const {
         std::shared_lock lock(mutex_);
-        if (!has_last_) return std::nullopt;
+        if (!has_last_)
+            return std::nullopt;
         return last_;
     }
 

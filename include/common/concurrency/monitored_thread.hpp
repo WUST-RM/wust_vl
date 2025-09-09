@@ -186,4 +186,4 @@ private:
     std::map<std::string, std::weak_ptr<MonitoredThread>> threads_;
 };
 
-}
+} // namespace wust_vl_concurrency

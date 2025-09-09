@@ -285,7 +285,9 @@ void HikCamera::startCamera(bool if_recorder) {
     if (trigger_type_ != TriggerType::Software) {
         capture_thread_ = wust_vl_concurrency::MonitoredThread::create(
             "HikCaptureThread",
-            [this](std::shared_ptr<wust_vl_concurrency::MonitoredThread> self) { this->hikCaptureLoop(self); }
+            [this](std::shared_ptr<wust_vl_concurrency::MonitoredThread> self) {
+                this->hikCaptureLoop(self);
+            }
         );
 
         // 注册到全局管理器
