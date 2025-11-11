@@ -15,7 +15,6 @@
 
 #include "MvCameraControl.h"
 #include "common/concurrency/monitored_thread.hpp"
-#include "common/utils/recorder.hpp"
 #include "video/image.hpp"
 #include <thread>
 #include <yaml-cpp/yaml.h>
@@ -42,17 +41,25 @@ public:
         bool reverse_x,
         bool reverse_y
     );
-    void startCamera(bool if_recorder);
+    void setExposureTime(double exposure_time);
+    double getExposureTime() const {
+        return last_exposure_time_;
+    }
+    void startCamera();
     bool restartCamera();
     void stopCamera();
     bool enableTrigger(TriggerType type, const std::string& source, int64_t activation);
     void disableTrigger();
     bool read();
     ImageFrame readImage();
+    void setPixelFormat(const std::string& pixel_format);
+    void setRgb(bool rgb) {
+        use_rgb_ = rgb;
+    }
 
 private:
     void hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThread> self);
-
+    bool use_rgb_ = false;
     void* camera_handle_;
     int fail_count_;
     MV_IMAGE_BASIC_INFO img_info_;
@@ -74,6 +81,5 @@ private:
     int expected_width_ = 0;
     int expected_height_ = 0;
     std::function<void(ImageFrame&)> on_frame_callback_;
-    std::unique_ptr<Recorder> recorder_;
 };
 } // namespace wust_vl_video

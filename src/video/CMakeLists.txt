@@ -15,4 +15,8 @@ target_include_directories(wust_vl_video PRIVATE
     ${HikSDK_INCLUDE_DIR}
     ${OpenCV_INCLUDE_DIRS}
 )
+target_link_libraries(wust_vl_video
+    ${OpenCV_LIBS}
+    ${HikSDK_LIB}      
+)
 

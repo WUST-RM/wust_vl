@@ -42,6 +42,9 @@ public:
     void read();
     ImageFrame readImage();
     void enableHikTrigger(TriggerType type, const std::string& source, int64_t activation);
+    void setHikExposureTime(double exposure_time);
+    void setHikRgb(bool rgb);
+    double getHikExposureTime() const;
     void setFrameCallback(std::function<void(ImageFrame&)> cb);
     struct Impl;
     std::unique_ptr<Impl> _impl;

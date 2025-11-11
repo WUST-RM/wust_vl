@@ -26,11 +26,20 @@ struct TensorRTNet::Impl {
         if (runtime_)
             delete runtime_;
     }
+    int64_t volume(const nvinfer1::Dims& dims) {
+        int64_t size = 1;
+        for (int i = 0; i < dims.nbDims; ++i) {
+            size *= dims.d[i];
+        }
+        return size;
+    }
+
     bool init(const Params& params) {
         params_ = params;
         buildEngine(params_.model_path);
         TRT_ASSERT(context_ = engine_->createExecutionContext());
         TRT_ASSERT(context_ != nullptr);
+        int nbIO = engine_->getNbIOTensors();
         input_name_ = engine_->getIOTensorName(0);
         output_name_ = engine_->getIOTensorName(1);
         input_idx_ = 0;
@@ -44,8 +53,11 @@ struct TensorRTNet::Impl {
         input_dims_ = context_->getTensorShape(input_name_);
         output_dims_ = context_->getTensorShape(output_name_);
 
-        input_sz_ = input_dims_.d[1] * input_dims_.d[2] * input_dims_.d[3];
-        output_sz_ = output_dims_.d[1] * output_dims_.d[2];
+        input_sz_ = volume(input_dims_);
+        output_sz_ = volume(output_dims_);
+
+        std::cout << "input_dims: " << input_sz_ << std::endl;
+        std::cout << "output_dims: " << output_sz_ << std::endl;
         TRT_ASSERT(cudaMalloc(&device_buffers_[input_idx_], input_sz_ * sizeof(float)) == 0);
         TRT_ASSERT(cudaMalloc(&device_buffers_[output_idx_], output_sz_ * sizeof(float)) == 0);
         output_buffer_ = new float[output_sz_];

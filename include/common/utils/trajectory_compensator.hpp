@@ -38,10 +38,10 @@ public:
     double resistance_ = 0.01;
 
     // New parameters for RK4 model
-    double rho_ = 1.225;            // 空气密度 (kg/m^3)
-    double Cd_ = 0.3;               // 阻力系数
-    double A_ = 0.0005;             // 弹头迎风面积 (m^2)
-    double mass_ = 0.02;            // 弹头质量 (kg)
+    double rho_ = 1.225; // 空气密度 (kg/m^3)
+    double Cd_ = 0.3; // 阻力系数
+    double A_ = 0.0005; // 弹头迎风面积 (m^2)
+    double mass_ = 0.02; // 弹头质量 (kg)
 
 protected:
     // Calculate the trajectory of the bullet, return the vertical impact point
@@ -97,7 +97,6 @@ public:
             return nullptr;
         }
     }
-
 
 private:
     CompensatorFactory() = delete;

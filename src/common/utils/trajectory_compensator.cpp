@@ -109,60 +109,73 @@ double ResistanceCompensator::getFlyingTime(
     return t;
 }
 
-double RK4Compensator::calculateTrajectory(const double target_x, const double angle, const double bullet_speed)
-    const noexcept {
-    // 使用基类中的物理参数
-    double k = 0.5 * rho_ * Cd_ * A_ / mass_;
+double RK4Compensator::calculateTrajectory(
+    const double target_x,
+    const double angle,
+    const double bullet_speed
+) const noexcept {
+    const double k = 0.5 * rho_ * Cd_ * A_ / mass_;
+    const double cos_a = std::cos(angle);
+    const double sin_a = std::sin(angle);
+    const double g = gravity_;
 
-    Eigen::Vector3d p(0.0, 0.0, 0.0);
-    Eigen::Vector3d v(bullet_speed * std::cos(angle), 0.0, bullet_speed * std::sin(angle));
+    double px = 0.0, pz = 0.0;
+    double vx = bullet_speed * cos_a;
+    double vz = bullet_speed * sin_a;
 
-    double dt = 0.001;
-    int max_steps = 5e6;
-    Eigen::Vector3d p_prev = p, v_prev = v;
-
-    auto accel = [&](const Eigen::Vector3d& vel) -> Eigen::Vector3d {
-        double speed = vel.norm();
-        if (speed < 1e-9) return Eigen::Vector3d(0, 0, -gravity_);
-        Eigen::Vector3d drag = -k * speed * vel;
-        return drag + Eigen::Vector3d(0, 0, -gravity_);
-    };
-
+    double px_prev = 0.0, pz_prev = 0.0;
+    double dt = 0.005;
+    const double base_dt = 0.005;
+    const int max_steps = 1000000;
     int steps = 0;
-    while (p.x() < target_x && p.z() > -100 && steps < max_steps) {
-        // RK4 积分
-        Eigen::Vector3d k1_v = accel(v);
-        Eigen::Vector3d k1_p = v;
 
-        Eigen::Vector3d v2 = v + 0.5 * dt * k1_v;
-        Eigen::Vector3d p2 = p + 0.5 * dt * k1_p;
-        Eigen::Vector3d k2_v = accel(v2);
-        Eigen::Vector3d k2_p = v2;
+    while (px < target_x && pz > -50.0 && steps < max_steps) {
+        px_prev = px;
+        pz_prev = pz;
 
-        Eigen::Vector3d v3 = v + 0.5 * dt * k2_v;
-        Eigen::Vector3d p3 = p + 0.5 * dt * k2_p;
-        Eigen::Vector3d k3_v = accel(v3);
-        Eigen::Vector3d k3_p = v3;
+        double speed = std::sqrt(vx * vx + vz * vz);
+        double drag = (speed > 1e-9) ? -k * speed : 0.0;
 
-        Eigen::Vector3d v4 = v + dt * k3_v;
-        Eigen::Vector3d p4 = p + dt * k3_p;
-        Eigen::Vector3d k4_v = accel(v4);
-        Eigen::Vector3d k4_p = v4;
+        double ax = drag * vx;
+        double az = drag * vz - g;
 
-        p_prev = p;
-        v_prev = v;
+        double vx_mid = vx + 0.5 * dt * ax;
+        double vz_mid = vz + 0.5 * dt * az;
 
-        p += dt * (k1_p + 2*k2_p + 2*k3_p + k4_p) / 6.0;
-        v += dt * (k1_v + 2*k2_v + 2*k3_v + k4_v) / 6.0;
+        double speed_mid = std::sqrt(vx_mid * vx_mid + vz_mid * vz_mid);
+        double drag_mid = (speed_mid > 1e-9) ? -k * speed_mid : 0.0;
 
-        steps++;
+        double ax_mid = drag_mid * vx_mid;
+        double az_mid = drag_mid * vz_mid - g;
+
+        px += dt * vx_mid;
+        pz += dt * vz_mid;
+        vx += dt * ax_mid;
+        vz += dt * az_mid;
+
+        ++steps;
+
+        double remain_x = target_x - px;
+        double distance_ratio = std::clamp(remain_x / target_x, 0.05, 1.0);
+        double speed_ratio = std::clamp(speed / (bullet_speed + 1e-9), 0.3, 1.5);
+
+        dt = std::clamp(
+            base_dt * (0.8 + 0.4 * speed_ratio) * (0.5 + 0.5 * distance_ratio),
+            0.001,
+            0.006
+        );
+
+        if (vz < -1e-2 && pz < 0.0)
+            break;
+        if (px > target_x + 2.0)
+            break;
     }
 
-    double x0 = p_prev.x(), x1 = p.x();
-    double z0 = p_prev.z(), z1 = p.z();
-    if (x1 == x0) return z1;
-    double alpha = (target_x - x0) / (x1 - x0);
-    alpha = std::clamp(alpha, 0.0, 1.0);
+    const double x0 = px_prev, x1 = px;
+    const double z0 = pz_prev, z1 = pz;
+    if (std::abs(x1 - x0) < 1e-9)
+        return z1;
+    const double alpha = std::clamp((target_x - x0) / (x1 - x0), 0.0, 1.0);
     return z0 + alpha * (z1 - z0);
 }
 
@@ -170,49 +183,64 @@ double RK4Compensator::getFlyingTime(
     const Eigen::Vector3d& target_position,
     const double bullet_speed
 ) const noexcept {
-    double distance = std::sqrt(target_position(0)*target_position(0) + target_position(1)*target_position(1));
-    double angle = std::atan2(target_position(2), distance);
+    const double distance = std::hypot(target_position(0), target_position(1));
+    const double angle = std::atan2(target_position(2), distance);
 
-    double k = 0.5 * rho_ * Cd_ * A_ / mass_;
+    const double k = 0.5 * rho_ * Cd_ * A_ / mass_;
+    const double cos_a = std::cos(angle);
+    const double sin_a = std::sin(angle);
+    const double g = gravity_;
 
-    Eigen::Vector3d p(0, 0, 0);
-    Eigen::Vector3d v(bullet_speed * std::cos(angle), 0, bullet_speed * std::sin(angle));
+    double px = 0.0, pz = 0.0;
+    double vx = bullet_speed * cos_a;
+    double vz = bullet_speed * sin_a;
 
-    double dt = 0.001;
+    double dt = 0.005;
+    const double base_dt = 0.005;
+    const int max_steps = 1000000;
     double t = 0.0;
+    int steps = 0;
 
-    auto accel = [&](const Eigen::Vector3d& vel) -> Eigen::Vector3d {
-        double speed = vel.norm();
-        if (speed < 1e-9) return Eigen::Vector3d(0, 0, -gravity_);
-        Eigen::Vector3d drag = -k * speed * vel;
-        return drag + Eigen::Vector3d(0, 0, -gravity_);
-    };
+    while (px < distance && pz > -50.0 && steps < max_steps) {
+        double speed = std::sqrt(vx * vx + vz * vz);
+        double drag = (speed > 1e-9) ? -k * speed : 0.0;
 
-    while (p.x() < distance && p.z() > -100) {
-        Eigen::Vector3d k1_v = accel(v);
-        Eigen::Vector3d k1_p = v;
+        double ax = drag * vx;
+        double az = drag * vz - g;
 
-        Eigen::Vector3d v2 = v + 0.5 * dt * k1_v;
-        Eigen::Vector3d p2 = p + 0.5 * dt * k1_p;
-        Eigen::Vector3d k2_v = accel(v2);
-        Eigen::Vector3d k2_p = v2;
+        // RK2 Midpoint
+        double vx_mid = vx + 0.5 * dt * ax;
+        double vz_mid = vz + 0.5 * dt * az;
 
-        Eigen::Vector3d v3 = v + 0.5 * dt * k2_v;
-        Eigen::Vector3d p3 = p + 0.5 * dt * k2_p;
-        Eigen::Vector3d k3_v = accel(v3);
-        Eigen::Vector3d k3_p = v3;
+        double speed_mid = std::sqrt(vx_mid * vx_mid + vz_mid * vz_mid);
+        double drag_mid = (speed_mid > 1e-9) ? -k * speed_mid : 0.0;
 
-        Eigen::Vector3d v4 = v + dt * k3_v;
-        Eigen::Vector3d p4 = p + dt * k3_p;
-        Eigen::Vector3d k4_v = accel(v4);
-        Eigen::Vector3d k4_p = v4;
+        double ax_mid = drag_mid * vx_mid;
+        double az_mid = drag_mid * vz_mid - g;
 
-        p += dt * (k1_p + 2*k2_p + 2*k3_p + k4_p) / 6.0;
-        v += dt * (k1_v + 2*k2_v + 2*k3_v + k4_v) / 6.0;
+        px += dt * vx_mid;
+        pz += dt * vz_mid;
+        vx += dt * ax_mid;
+        vz += dt * az_mid;
+
         t += dt;
+        ++steps;
+
+        double remain_x = distance - px;
+        double distance_ratio = std::clamp(remain_x / distance, 0.05, 1.0);
+        double speed_ratio = std::clamp(speed / (bullet_speed + 1e-9), 0.3, 1.5);
+
+        dt = std::clamp(
+            base_dt * (0.8 + 0.4 * speed_ratio) * (0.5 + 0.5 * distance_ratio),
+            0.001,
+            0.006
+        );
+
+        if (vz < -1e-2 && pz < 0.0)
+            break;
+        if (px > distance + 2.0)
+            break;
     }
 
     return t;
 }
-
-

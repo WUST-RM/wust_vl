@@ -31,8 +31,6 @@ inline cv::Mat convertToMat(const ImageFrame& frame, bool use_raw = false) {
     if (frame.data.empty()) {
         return cv::Mat();
     }
-
-    // 用原始数据创建单通道 Mat（Bayer 图）
     cv::Mat bayer_img(
         frame.height,
         frame.width,
@@ -40,15 +38,13 @@ inline cv::Mat convertToMat(const ImageFrame& frame, bool use_raw = false) {
         const_cast<uint8_t*>(frame.data.data()),
         frame.step
     );
-
-    // 转换为 BGR
-    cv::Mat bgr_img;
+    cv::Mat img;
     if (use_raw || frame.pixel_type < 0) {
-        bgr_img = bayer_img.clone();
+        img = bayer_img.clone();
     } else {
-        cv::cvtColor(bayer_img, bgr_img, frame.pixel_type);
+        cv::cvtColor(bayer_img, img, frame.pixel_type);
     }
 
-    return bgr_img; // 已经是 BGR 彩色图
+    return img;
 }
 } // namespace wust_vl_video

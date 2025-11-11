@@ -13,6 +13,9 @@
 // limitations under the License.
 
 #pragma once
+#ifdef DEBUG
+    #undef DEBUG
+#endif
 
 #include <algorithm>
 #include <chrono>

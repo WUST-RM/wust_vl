@@ -16,18 +16,24 @@ public:
      * @param phi_vec 边界层向量 (dim) 或标量，防止抖振
      * @param alpha 控制量低通滤波系数 (0~1)
      */
-    SMC_MIMO(int dim, 
-             const Eigen::MatrixXd& B,
-             const Eigen::MatrixXd& lambda,
-             const Eigen::MatrixXd& k,
-             const Eigen::VectorXd& phi_vec,
-             double alpha = 0.2)
-        : dim_(dim), B_(B), Lambda_(lambda), K_(k), phi_vec_(phi_vec), alpha_(alpha)
-    {
-        if (B_.rows() != dim_ || B_.cols() != dim_ ||
-            Lambda_.rows() != dim_ || Lambda_.cols() != dim_ ||
-            K_.rows() != dim_ || K_.cols() != dim_ ||
-            phi_vec_.size() != dim_) {
+    SMC_MIMO(
+        int dim,
+        const Eigen::MatrixXd& B,
+        const Eigen::MatrixXd& lambda,
+        const Eigen::MatrixXd& k,
+        const Eigen::VectorXd& phi_vec,
+        double alpha = 0.2
+    ):
+        dim_(dim),
+        B_(B),
+        Lambda_(lambda),
+        K_(k),
+        phi_vec_(phi_vec),
+        alpha_(alpha) {
+        if (B_.rows() != dim_ || B_.cols() != dim_ || Lambda_.rows() != dim_
+            || Lambda_.cols() != dim_ || K_.rows() != dim_ || K_.cols() != dim_
+            || phi_vec_.size() != dim_)
+        {
             throw std::runtime_error("Matrix/vector dimension mismatch!");
         }
         s_ = Eigen::VectorXd::Zero(dim_);
@@ -72,9 +78,13 @@ public:
         return u_filtered_;
     }
 
-    Eigen::VectorXd getSlidingSurface() const { return s_; }
+    Eigen::VectorXd getSlidingSurface() const {
+        return s_;
+    }
 
-    Eigen::VectorXd getFilteredControl() const { return u_filtered_; }
+    Eigen::VectorXd getFilteredControl() const {
+        return u_filtered_;
+    }
 
     void updateParameters(
         const Eigen::MatrixXd& B,
@@ -83,10 +93,9 @@ public:
         const Eigen::VectorXd& phi_vec,
         double alpha = 0.2
     ) {
-        if (B.rows() != dim_ || B.cols() != dim_ ||
-            Lambda.rows() != dim_ || Lambda.cols() != dim_ ||
-            K.rows() != dim_ || K.cols() != dim_ ||
-            phi_vec.size() != dim_) {
+        if (B.rows() != dim_ || B.cols() != dim_ || Lambda.rows() != dim_ || Lambda.cols() != dim_
+            || K.rows() != dim_ || K.cols() != dim_ || phi_vec.size() != dim_)
+        {
             throw std::runtime_error("Matrix/vector dimension mismatch!");
         }
         B_ = B;
@@ -102,9 +111,9 @@ private:
     Eigen::MatrixXd Lambda_;
     Eigen::MatrixXd K_;
     Eigen::VectorXd phi_vec_;
-    double alpha_;  // 控制量低通滤波系数
+    double alpha_; // 控制量低通滤波系数
 
-    Eigen::VectorXd s_;          // 滑模面
+    Eigen::VectorXd s_; // 滑模面
     Eigen::VectorXd u_filtered_; // 滤波后的控制量
 };
 

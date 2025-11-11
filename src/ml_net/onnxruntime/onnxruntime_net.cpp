@@ -55,26 +55,29 @@ struct OnnxRuntimeNet::Impl {
         // 8. 获取输出节点名称
         output_name_ = session_->GetOutputNameAllocated(0, allocator).get();
     }
-    float* infer(std::vector<float> input_tensor_values) {
+    float* infer(float* input_data, size_t input_size) {
         Ort::MemoryInfo memory_info =
             Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
         Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
             memory_info,
-            input_tensor_values.data(),
-            input_tensor_values.size(),
+            input_data,
+            input_size,
             input_dims_.data(),
             input_dims_.size()
         );
 
         const char* input_names[] = { input_name_.c_str() };
         const char* output_names[] = { output_name_.c_str() };
+
         auto output_tensors =
             session_
                 ->Run(Ort::RunOptions { nullptr }, input_names, &input_tensor, 1, output_names, 1);
 
+        // 获取输出指针
         float* output_data = output_tensors.front().GetTensorMutableData<float>();
         return output_data;
     }
+
     std::vector<int64_t> getOutputShape() {
         auto output_type_info = session_->GetOutputTypeInfo(0);
         auto output_tensor_info = output_type_info.GetTensorTypeAndShapeInfo();
@@ -96,8 +99,8 @@ OnnxRuntimeNet::~OnnxRuntimeNet() {
 void OnnxRuntimeNet::init(const Params& params) {
     _impl->init(params);
 }
-float* OnnxRuntimeNet::infer(std::vector<float> input_tensor_values) {
-    return _impl->infer(input_tensor_values);
+float* OnnxRuntimeNet::infer(float* input_data, size_t input_size) {
+    return _impl->infer(input_data, input_size);
 }
 std::vector<int64_t> OnnxRuntimeNet::getOutputShape() {
     return _impl->getOutputShape();

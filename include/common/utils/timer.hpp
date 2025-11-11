@@ -6,7 +6,10 @@
 #include <functional>
 #include <iomanip>
 #include <mutex>
+#include <sstream>
+#include <string>
 #include <thread>
+
 class Timer {
 public:
     using Callback = std::function<void(double)>;
@@ -79,10 +82,17 @@ private:
     std::shared_ptr<wust_vl_concurrency::MonitoredThread> thread_;
     bool running_ = false;
 };
+
 namespace time_utils {
 
 using Clock = std::chrono::steady_clock;
 using TimePoint = Clock::time_point;
+
+/// --------- 全局程序启动时间点 ---------
+inline const TimePoint& programStartTime() {
+    static const TimePoint start = Clock::now();
+    return start;
+}
 
 /// 获取当前时间点
 inline TimePoint now() {
@@ -93,11 +103,9 @@ inline TimePoint now() {
 inline double durationMs(const TimePoint& start, const TimePoint& end) {
     return std::chrono::duration<double, std::milli>(end - start).count();
 }
-
 inline double durationUs(const TimePoint& start, const TimePoint& end) {
     return std::chrono::duration<double, std::micro>(end - start).count();
 }
-
 inline double durationSec(const TimePoint& start, const TimePoint& end) {
     return std::chrono::duration<double>(end - start).count();
 }
@@ -107,26 +115,34 @@ inline double elapsedMs(const TimePoint& start) {
     return durationMs(start, now());
 }
 
-/// 格式化时间差为字符串（毫秒，3位精度）
+/// 从程序启动到现在的毫秒差
+inline double sinceProgramStartMs() {
+    return elapsedMs(programStartTime());
+}
+
+/// 从程序启动到现在的秒差
+inline double sinceProgramStartSec() {
+    return durationSec(programStartTime(), now());
+}
+
+/// 格式化输出
 inline std::string formatDurationMs(const TimePoint& start, const TimePoint& end) {
     std::ostringstream oss;
     oss << std::fixed << std::setprecision(3) << durationMs(start, end) << " ms";
     return oss.str();
 }
-
 inline std::string formatDurationUs(const TimePoint& start, const TimePoint& end) {
     std::ostringstream oss;
     oss << std::fixed << std::setprecision(1) << durationUs(start, end) << " us";
     return oss.str();
 }
-
 inline std::string formatDurationSec(const TimePoint& start, const TimePoint& end) {
     std::ostringstream oss;
     oss << std::fixed << std::setprecision(6) << durationSec(start, end) << " s";
     return oss.str();
 }
 
-/// 获取系统当前时间（wall clock）并格式化为字符串
+/// 当前系统时间字符串
 inline std::string currentSystemTimeStr(const char* format = "%Y-%m-%d %H:%M:%S") {
     auto now = std::chrono::system_clock::now();
     auto now_time_t = std::chrono::system_clock::to_time_t(now);
@@ -141,10 +157,10 @@ inline std::string currentSystemTimeStr(const char* format = "%Y-%m-%d %H:%M:%S"
     return std::string(buf);
 }
 
-/// 获取当前时间点（steady_clock）偏移毫秒后的字符串（相对格式）
-inline std::string offsetTimePointStr(const TimePoint& base, const char* label = "ΔT") {
+/// 相对程序启动时间的格式化字符串
+inline std::string sinceProgramStartStr() {
     std::ostringstream oss;
-    oss << label << ": +" << std::fixed << std::setprecision(3) << elapsedMs(base) << " ms";
+    oss << "[+" << std::fixed << std::setprecision(3) << sinceProgramStartMs() << " ms]";
     return oss.str();
 }
 

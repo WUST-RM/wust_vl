@@ -45,7 +45,7 @@ public:
     ~OnnxRuntimeNet();
 
     void init(const Params& params);
-    float* infer(std::vector<float> input_tensor_values);
+    float* infer(float* input_data, size_t input_size);
     std::vector<int64_t> getOutputShape();
 
 private:

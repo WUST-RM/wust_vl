@@ -25,6 +25,7 @@ struct Camera::Impl {
                     config["hik_camera"]["reverse_x"].as<bool>(false),
                     config["hik_camera"]["reverse_y"].as<bool>(false)
                 );
+                hik_camera_->setRgb(config_["hik_camera"]["rgb"].as<bool>(false));
                 return true;
             }
 
@@ -71,8 +72,7 @@ struct Camera::Impl {
     }
     void start() {
         if (hik_camera_) {
-            bool if_recorder = config_["hik_camera"]["recorder"].as<bool>(false);
-            hik_camera_->startCamera(if_recorder);
+            hik_camera_->startCamera();
         }
         if (video_player_) {
             video_player_->start();
@@ -116,6 +116,22 @@ void Camera::setFrameCallback(std::function<void(ImageFrame&)> cb) {
     _impl->setFrameCallback(cb);
 }
 void Camera::enableHikTrigger(TriggerType type, const std::string& source, int64_t activation) {
-    _impl->hik_camera_->enableTrigger(type, source, activation);
+    if (_impl->hik_camera_) {
+        _impl->hik_camera_->enableTrigger(type, source, activation);
+    }
+}
+void Camera::setHikExposureTime(double exposure_time) {
+    if (_impl->hik_camera_) {
+        _impl->hik_camera_->setExposureTime(exposure_time);
+    }
+}
+double Camera::getHikExposureTime() const {
+    if (_impl->hik_camera_) {
+        return _impl->hik_camera_->getExposureTime();
+    }
+    return -1.0;
+}
+void Camera::setHikRgb(bool rgb) {
+    _impl->hik_camera_->setRgb(rgb);
 }
 } // namespace wust_vl_video

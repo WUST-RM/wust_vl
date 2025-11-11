@@ -168,13 +168,13 @@ private:
 };
 
 template<typename T>
-concept ArithmeticLike = requires(T a, T b, size_t n) {
+concept ArithmeticLike = requires(T a, T b, double n) {
     {
         a + b
-        } -> std::same_as<T>; // 支持加法
+        } -> std::same_as<T>; // 必须支持加法
     {
         a / n
-        } -> std::same_as<T>; // 能被 size_t 整数除
+        } -> std::convertible_to<T>; // 能被浮点数除并返回可转换为 T
 };
 
 template<ArithmeticLike T>

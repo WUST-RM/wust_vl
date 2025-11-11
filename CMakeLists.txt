@@ -7,13 +7,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 
-set(CMAKE_BUILD_TYPE RELEASE)
+set(CMAKE_BUILD_TYPE "Release")
 add_compile_options(-O3 -w)
 
-option(BUILD_WITH_TRT      "Enable TensorRT backend"   OFF)
+option(BUILD_WITH_TRT      "Enable TensorRT backend"   ON)
 option(BUILD_WITH_OPENVINO "Enable OpenVINO backend"   ON)
-option(BUILD_WITH_NCNN     "Enable NCNN backend"       OFF)
-option(BUILD_WITH_ORT      "Enable ORT backend"        OFF)
+option(BUILD_WITH_NCNN     "Enable NCNN backend"       ON)
+option(BUILD_WITH_ORT      "Enable ORT backend"        ON)
 
 set(WUST_VL_VERSION_MAJOR 1)
 set(WUST_VL_VERSION_MINOR 0)
