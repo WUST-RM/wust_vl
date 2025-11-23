@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -119,16 +120,16 @@ public:
         }
         return true;
     }
-    std::tuple<double, double>
-    applyManualCompensator(double distance, double z, double raw_yaw, double raw_pitch) {
-        auto offs = this->angleHardCorrect(distance, z);
-        double yaw_off = offs[1] * M_PI / 180.0;
-        double pitch_off = offs[0] * M_PI / 180.0;
-        return { raw_yaw + yaw_off, raw_pitch + pitch_off };
-    }
 
+    void setBaseOffset(double base_pitch_deg, double base_yaw_deg) {
+        base_pitch_ = base_pitch_deg;
+        base_yaw_ = base_yaw_deg;
+    }
+    void setBasePitch(double p) { base_pitch_ = p; }
+    void setBaseYaw(double y)   { base_yaw_   = y; }
 private:
     bool parseStr(const std::string& str, std::vector<double>& nums);
-
+    double base_pitch_ = 0.0; // 单位：度
+    double base_yaw_ = 0.0; // 单位：度
     std::vector<DistMapNode> angle_offset_map_;
 };

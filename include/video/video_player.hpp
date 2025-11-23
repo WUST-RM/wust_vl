@@ -35,7 +35,11 @@ public:
     void stop();
     bool read();
     void enableTriggerMode(bool enable);
+    void setCvtFlag(bool use_cvt)
+    {
+        use_cvt_ = use_cvt;
 
+    }
     ~VideoPlayer();
 
 private:
@@ -50,5 +54,6 @@ private:
     std::thread worker_;
     bool trigger_mode_ = false;
     FrameCallback on_frame_callback_;
+    bool use_cvt_= false;
 };
 } // namespace wust_vl_video

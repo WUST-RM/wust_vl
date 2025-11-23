@@ -15,6 +15,7 @@
 
 #include "MvCameraControl.h"
 #include "common/concurrency/monitored_thread.hpp"
+#include "common/concurrency/queues.hpp"
 #include "video/image.hpp"
 #include <thread>
 #include <yaml-cpp/yaml.h>
@@ -81,5 +82,30 @@ private:
     int expected_width_ = 0;
     int expected_height_ = 0;
     std::function<void(ImageFrame&)> on_frame_callback_;
+    TimedQueue<ImageFrame> img_queue_ { 1.0 }; // 1s 有效时间窗口
+    std::shared_ptr<wust_vl_concurrency::MonitoredThread> process_thread_;
+    void hikProcessLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThread> self);
+    const std::unordered_map<MvGvspPixelType, int> PIXEL_MAP_RGB = {
+        { PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGR2RGB_EA },
+        { PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2RGB_EA },
+        { PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2RGB_EA },
+        { PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2RGB_EA },
+        { PixelType_Gvsp_RGB8_Packed, -1 },
+        { PixelType_Gvsp_Mono8, cv::COLOR_GRAY2RGB },
+    };
+
+    const std::unordered_map<MvGvspPixelType, int> PIXEL_MAP_BGR = {
+        { PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGR2BGR_EA },
+        { PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2BGR_EA },
+        { PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2BGR_EA },
+        { PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2BGR_EA },
+        { PixelType_Gvsp_RGB8_Packed, -1 },
+        { PixelType_Gvsp_Mono8, cv::COLOR_GRAY2BGR },
+    };
+    const std::unordered_map<MvGvspPixelType, int> img_type_map = {
+        { PixelType_Gvsp_BayerGR8, CV_8UC1 },    { PixelType_Gvsp_BayerRG8, CV_8UC1 },
+        { PixelType_Gvsp_BayerGB8, CV_8UC1 },    { PixelType_Gvsp_BayerBG8, CV_8UC1 },
+        { PixelType_Gvsp_RGB8_Packed, CV_8UC3 }, { PixelType_Gvsp_Mono8, CV_8UC1 },
+    };
 };
 } // namespace wust_vl_video

@@ -116,43 +116,67 @@ public:
     struct QueueItem {
         T data;
         std::chrono::steady_clock::time_point timestamp;
+        QueueItem(const T& d, const std::chrono::steady_clock::time_point& ts):
+            data(d),
+            timestamp(ts) {}
+
+        QueueItem(T&& d, const std::chrono::steady_clock::time_point& ts):
+            data(std::move(d)),
+            timestamp(ts) {}
     };
 
-    TimedQueue(double valid_duration): valid_duration_(valid_duration) {}
+    explicit TimedQueue(double valid_duration): valid_duration_(valid_duration) {}
 
-    // 添加新目标
+    // 添加新目标（自动清理）
     void push(
         const T& obj,
         std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now()
     ) {
         std::lock_guard<std::mutex> lk(mtx_);
+        clear_stale_locked();
         queue_.push_back({ obj, timestamp });
     }
-
-    // 获取时间有效目标（受 query_interval_ 控制）
-    std::vector<T> get_valid_targets() {
-        auto now = std::chrono::steady_clock::now();
-        std::vector<T> valid_targets;
-
+    void push(
+        T&& obj,
+        std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now()
+    ) {
         std::lock_guard<std::mutex> lk(mtx_);
-        if (queue_.empty())
-            return valid_targets;
-
-        for (const auto& item: queue_) {
-            double dt = std::chrono::duration<double>(now - item.timestamp).count();
-            if (dt <= valid_duration_) {
-                valid_targets.push_back(item.data);
-            }
-        }
-
-        last_query_ = now;
-        return valid_targets;
+        clear_stale_locked();
+        queue_.push_back({ std::move(obj), timestamp });
     }
 
-    // 清除超过 valid_duration_ 的目标
-    void clear_stale() {
+    // 出队有效目标（自动清理）
+    bool pop_valid(T& out) {
         auto now = std::chrono::steady_clock::now();
         std::lock_guard<std::mutex> lk(mtx_);
+        clear_stale_locked();
+
+        for (auto it = queue_.begin(); it != queue_.end(); ++it) {
+            out = std::move(it->data);
+            queue_.erase(it);
+            return true;
+        }
+        return false;
+    }
+
+    // 获取当前所有有效目标（自动清理）
+    std::vector<T> get_valid_targets() {
+        auto now = std::chrono::steady_clock::now();
+        std::vector<T> result;
+
+        std::lock_guard<std::mutex> lk(mtx_);
+        clear_stale_locked();
+
+        for (auto& item: queue_)
+            result.push_back(item.data);
+
+        last_query_ = now;
+        return result;
+    }
+
+private:
+    void clear_stale_locked() {
+        auto now = std::chrono::steady_clock::now();
         auto it = std::remove_if(queue_.begin(), queue_.end(), [&](const QueueItem& item) {
             double dt = std::chrono::duration<double>(now - item.timestamp).count();
             return dt > valid_duration_;
@@ -160,11 +184,10 @@ public:
         queue_.erase(it, queue_.end());
     }
 
-private:
     std::vector<QueueItem> queue_;
     std::mutex mtx_;
     std::chrono::steady_clock::time_point last_query_ = std::chrono::steady_clock::now();
-    double valid_duration_; // 有效时间窗口（receive_dt_）
+    double valid_duration_;
 };
 
 template<typename T>

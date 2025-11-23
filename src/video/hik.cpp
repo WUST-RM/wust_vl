@@ -50,6 +50,10 @@ HikCamera::~HikCamera() {
         capture_thread_->stop();
         wust_vl_concurrency::ThreadManager::instance().unregisterThread(capture_thread_->getName());
     }
+    if (process_thread_) {
+        process_thread_->stop();
+        wust_vl_concurrency::ThreadManager::instance().unregisterThread(process_thread_->getName());
+    }
     if (camera_handle_) {
         MV_CC_StopGrabbing(camera_handle_);
         MV_CC_CloseDevice(camera_handle_);
@@ -294,6 +298,13 @@ void HikCamera::startCamera() {
 
         // 注册到全局管理器
         wust_vl_concurrency::ThreadManager::instance().registerThread(capture_thread_);
+        process_thread_ = wust_vl_concurrency::MonitoredThread::create(
+            "HikProcessThread",
+            [this](std::shared_ptr<wust_vl_concurrency::MonitoredThread> self) {
+                this->hikProcessLoop(self);
+            }
+        );
+        wust_vl_concurrency::ThreadManager::instance().registerThread(process_thread_);
     }
 }
 
@@ -335,7 +346,19 @@ bool HikCamera::restartCamera() {
     WUST_INFO(hik_logger_) << "Camera restarted successfully!";
     return true;
 }
-
+void HikCamera::hikProcessLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThread> self) {
+    while (self->isAlive()) {
+        ImageFrame frame;
+        self->heartbeat();
+        if (img_queue_.pop_valid(frame)) {
+            if (on_frame_callback_) {
+                on_frame_callback_(frame);
+            }
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+}
 void HikCamera::hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThread> self) {
     MV_FRAME_OUT out_frame;
     WUST_INFO(hik_logger_) << "Starting image capture loop!";
@@ -350,23 +373,22 @@ void HikCamera::hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThr
     try {
         while (self->isAlive()) {
             self->heartbeat();
+            auto start_time = std::chrono::steady_clock::now();
             int n_ret = MV_CC_GetImageBuffer(camera_handle_, &out_frame, 100);
             if (n_ret == MV_OK) {
                 in_fail_state = false;
                 ++frame_counter;
 
                 ImageFrame frame;
+                auto current_time = std::chrono::steady_clock::now();
+
+                frame.timestamp = current_time;
                 frame.width = out_frame.stFrameInfo.nWidth;
                 frame.height = out_frame.stFrameInfo.nHeight;
                 frame.data.resize(out_frame.stFrameInfo.nFrameLen);
                 std::memcpy(frame.data.data(), out_frame.pBufAddr, out_frame.stFrameInfo.nFrameLen);
                 const auto& frame_info = out_frame.stFrameInfo;
                 auto pixel_type = frame_info.enPixelType;
-                const static std::unordered_map<MvGvspPixelType, int> img_type_map = {
-                    { PixelType_Gvsp_BayerGR8, CV_8UC1 },    { PixelType_Gvsp_BayerRG8, CV_8UC1 },
-                    { PixelType_Gvsp_BayerGB8, CV_8UC1 },    { PixelType_Gvsp_BayerBG8, CV_8UC1 },
-                    { PixelType_Gvsp_RGB8_Packed, CV_8UC3 }, { PixelType_Gvsp_Mono8, CV_8UC1 },
-                };
 
                 frame.img_type = img_type_map.at(pixel_type);
                 if (frame.img_type == CV_8UC3) {
@@ -374,35 +396,12 @@ void HikCamera::hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThr
                 } else if (frame.img_type == CV_8UC1) {
                     frame.step = frame.width;
                 }
-                static std::unordered_map<MvGvspPixelType, int> pixel_type_map;
-                if (use_rgb_) {
-                    pixel_type_map = {
-                        { PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGR2RGB_EA },
-                        { PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2RGB_EA },
-                        { PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2RGB_EA },
-                        { PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2RGB_EA },
-                        { PixelType_Gvsp_RGB8_Packed, -1 }, // 已经是 RGB，不需要再转换
-                        { PixelType_Gvsp_Mono8, cv::COLOR_GRAY2RGB },
-                    };
-
-                } else {
-                    pixel_type_map = {
-                        { PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGR2BGR_EA },
-                        { PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2BGR_EA },
-                        { PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2BGR_EA },
-                        { PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2BGR_EA },
-                        { PixelType_Gvsp_RGB8_Packed, -1 },
-                        { PixelType_Gvsp_Mono8, cv::COLOR_GRAY2BGR },
-                    };
-                }
-
-                frame.pixel_type = pixel_type_map.at(pixel_type);
-                auto current_time = std::chrono::steady_clock::now();
-                frame.timestamp = current_time;
-
-                if (on_frame_callback_) {
-                    on_frame_callback_(frame);
-                }
+                const auto& map_ref = use_rgb_ ? PIXEL_MAP_RGB : PIXEL_MAP_BGR;
+                frame.pixel_type = map_ref.at(pixel_type);
+                // if (on_frame_callback_) {
+                //     on_frame_callback_(frame);
+                // }
+                img_queue_.push(std::move(frame));
 
                 MV_CC_FreeImageBuffer(camera_handle_, &out_frame);
 
@@ -501,11 +500,6 @@ bool HikCamera::read() {
     std::memcpy(frame.data.data(), out_frame.pBufAddr, out_frame.stFrameInfo.nFrameLen);
     const auto& frame_info = out_frame.stFrameInfo;
     auto pixel_type = frame_info.enPixelType;
-    const static std::unordered_map<MvGvspPixelType, int> img_type_map = {
-        { PixelType_Gvsp_BayerGR8, CV_8UC1 },    { PixelType_Gvsp_BayerRG8, CV_8UC1 },
-        { PixelType_Gvsp_BayerGB8, CV_8UC1 },    { PixelType_Gvsp_BayerBG8, CV_8UC1 },
-        { PixelType_Gvsp_RGB8_Packed, CV_8UC3 }, { PixelType_Gvsp_Mono8, CV_8UC1 },
-    };
 
     frame.img_type = img_type_map.at(pixel_type);
     if (frame.img_type == CV_8UC3) {
@@ -513,29 +507,8 @@ bool HikCamera::read() {
     } else if (frame.img_type == CV_8UC1) {
         frame.step = frame.width;
     }
-    static std::unordered_map<MvGvspPixelType, int> pixel_type_map;
-    if (use_rgb_) {
-        pixel_type_map = {
-            { PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGR2RGB },
-            { PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2RGB },
-            { PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2RGB },
-            { PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2RGB },
-            { PixelType_Gvsp_RGB8_Packed, -1 }, // 已经是 RGB，不需要再转换
-            { PixelType_Gvsp_Mono8, cv::COLOR_GRAY2RGB },
-        };
-
-    } else {
-        pixel_type_map = {
-            { PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGR2BGR },
-            { PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2BGR },
-            { PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2BGR },
-            { PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2BGR },
-            { PixelType_Gvsp_RGB8_Packed, -1 },
-            { PixelType_Gvsp_Mono8, cv::COLOR_GRAY2BGR },
-        };
-    }
-
-    frame.pixel_type = pixel_type_map.at(pixel_type);
+    const auto& map_ref = use_rgb_ ? PIXEL_MAP_RGB : PIXEL_MAP_BGR;
+    frame.pixel_type = map_ref.at(pixel_type);
     frame.timestamp = std::chrono::steady_clock::now();
 
     if (on_frame_callback_) {
@@ -571,41 +544,14 @@ ImageFrame HikCamera::readImage() {
     std::memcpy(frame.data.data(), out_frame.pBufAddr, out_frame.stFrameInfo.nFrameLen);
     const auto& frame_info = out_frame.stFrameInfo;
     auto pixel_type = frame_info.enPixelType;
-    const static std::unordered_map<MvGvspPixelType, int> img_type_map = {
-        { PixelType_Gvsp_BayerGR8, CV_8UC1 },    { PixelType_Gvsp_BayerRG8, CV_8UC1 },
-        { PixelType_Gvsp_BayerGB8, CV_8UC1 },    { PixelType_Gvsp_BayerBG8, CV_8UC1 },
-        { PixelType_Gvsp_RGB8_Packed, CV_8UC3 }, { PixelType_Gvsp_Mono8, CV_8UC1 },
-    };
-
     frame.img_type = img_type_map.at(pixel_type);
     if (frame.img_type == CV_8UC3) {
         frame.step = frame.width * 3;
     } else if (frame.img_type == CV_8UC1) {
         frame.step = frame.width;
     }
-    static std::unordered_map<MvGvspPixelType, int> pixel_type_map;
-    if (use_rgb_) {
-        pixel_type_map = {
-            { PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGR2RGB },
-            { PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2RGB },
-            { PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2RGB },
-            { PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2RGB },
-            { PixelType_Gvsp_RGB8_Packed, -1 }, // 已经是 RGB，不需要再转换
-            { PixelType_Gvsp_Mono8, cv::COLOR_GRAY2RGB },
-        };
-
-    } else {
-        pixel_type_map = {
-            { PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGR2BGR },
-            { PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2BGR },
-            { PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2BGR },
-            { PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2BGR },
-            { PixelType_Gvsp_RGB8_Packed, -1 },
-            { PixelType_Gvsp_Mono8, cv::COLOR_GRAY2BGR },
-        };
-    }
-
-    frame.pixel_type = pixel_type_map.at(pixel_type);
+    const auto& map_ref = use_rgb_ ? PIXEL_MAP_RGB : PIXEL_MAP_BGR;
+    frame.pixel_type = map_ref.at(pixel_type);
     frame.timestamp = std::chrono::steady_clock::now();
 
     MV_CC_FreeImageBuffer(camera_handle_, &out_frame);

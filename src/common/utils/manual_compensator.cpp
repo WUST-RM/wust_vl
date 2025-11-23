@@ -70,10 +70,10 @@ std::vector<double> ManualCompensator::angleHardCorrect(const double dist, const
         );
 
         if (target_height_node != target_dist_node->height_map.end()) {
-            return { target_height_node->pitch_offset, target_height_node->yaw_offset };
+            return { target_height_node->pitch_offset+base_pitch_, target_height_node->yaw_offset+base_yaw_ };
         }
     }
-    return { 0.0, 0.0 };
+    return { base_pitch_, base_yaw_ };
 }
 
 bool ManualCompensator::parseStr(const std::string& str, std::vector<double>& nums) {

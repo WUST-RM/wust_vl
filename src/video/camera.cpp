@@ -34,12 +34,14 @@ struct Camera::Impl {
                 int video_play_fps = config["video_player"]["fps"].as<int>(30);
                 int start_frame = config["video_player"]["start_frame"].as<int>(0);
                 bool loop = config["video_player"]["loop"].as<bool>(false);
+                bool use_cvt = config["video_player"]["use_cvt"].as<bool>(false);
                 video_player_ = std::make_unique<VideoPlayer>(
                     video_play_path,
                     video_play_fps,
                     start_frame,
                     loop
                 );
+                video_player_->setCvtFlag(use_cvt);
                 return true;
             }
         }
@@ -133,5 +135,10 @@ double Camera::getHikExposureTime() const {
 }
 void Camera::setHikRgb(bool rgb) {
     _impl->hik_camera_->setRgb(rgb);
+}
+void Camera::setVideoPlayerCvtFlag(bool use_cvt) {
+    if (_impl->video_player_) {
+        _impl->video_player_->setCvtFlag(use_cvt);
+    }
 }
 } // namespace wust_vl_video

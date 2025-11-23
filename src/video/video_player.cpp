@@ -67,7 +67,8 @@ bool VideoPlayer::read() {
             return false;
         }
     }
-    //cv::cvtColor(frame_bgr, frame_bgr, cv::COLOR_BGR2RGB);
+    if(use_cvt_)
+            cv::cvtColor(frame_bgr, frame_bgr, cv::COLOR_BGR2RGB);
     ImageFrame frame;
     frame.src_img = std::move(frame_bgr);
     frame.timestamp = std::chrono::steady_clock::now();
@@ -112,8 +113,8 @@ void VideoPlayer::run() {
                 break;
             }
         }
-
-        //cv::cvtColor(frame_bgr, frame_bgr, cv::COLOR_BGR2RGB);
+        if(use_cvt_)
+            cv::cvtColor(frame_bgr, frame_bgr, cv::COLOR_BGR2RGB);
 
         ImageFrame frame;
         frame.src_img = std::move(frame_bgr);

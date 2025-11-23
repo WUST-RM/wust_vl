@@ -46,6 +46,7 @@ public:
     void setHikRgb(bool rgb);
     double getHikExposureTime() const;
     void setFrameCallback(std::function<void(ImageFrame&)> cb);
+    void setVideoPlayerCvtFlag(bool use_cvt);
     struct Impl;
     std::unique_ptr<Impl> _impl;
 };
