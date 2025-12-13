@@ -55,9 +55,6 @@ struct TensorRTNet::Impl {
 
         input_sz_ = volume(input_dims_);
         output_sz_ = volume(output_dims_);
-
-        std::cout << "input_dims: " << input_sz_ << std::endl;
-        std::cout << "output_dims: " << output_sz_ << std::endl;
         TRT_ASSERT(cudaMalloc(&device_buffers_[input_idx_], input_sz_ * sizeof(float)) == 0);
         TRT_ASSERT(cudaMalloc(&device_buffers_[output_idx_], output_sz_ * sizeof(float)) == 0);
         output_buffer_ = new float[output_sz_];
