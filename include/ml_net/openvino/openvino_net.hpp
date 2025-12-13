@@ -27,6 +27,9 @@ public:
     bool init(const Params& params, PppinitFun ppp_init_fun);
     ov::Tensor infer(const ov::Tensor& input_tensor);
     std::pair<ov::element::Type, ov::Shape> getInputInfo();
+    ov::InferRequest createInferRequest();
+    ov::Tensor infer(const ov::Tensor& input_tensor, ov::InferRequest& infer_request);
+    ov::Tensor infer_thread_local(const ov::Tensor& input_tensor);
 
 private:
     Params params_;

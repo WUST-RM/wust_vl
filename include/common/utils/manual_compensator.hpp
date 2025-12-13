@@ -125,8 +125,13 @@ public:
         base_pitch_ = base_pitch_deg;
         base_yaw_ = base_yaw_deg;
     }
-    void setBasePitch(double p) { base_pitch_ = p; }
-    void setBaseYaw(double y)   { base_yaw_   = y; }
+    void setBasePitch(double p) {
+        base_pitch_ = p;
+    }
+    void setBaseYaw(double y) {
+        base_yaw_ = y;
+    }
+
 private:
     bool parseStr(const std::string& str, std::vector<double>& nums);
     double base_pitch_ = 0.0; // 单位：度
