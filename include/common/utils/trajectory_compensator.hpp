@@ -37,11 +37,7 @@ public:
     double gravity_ = 9.8;
     double resistance_ = 0.01;
 
-    // New parameters for RK4 model
-    double rho_ = 1.225; // 空气密度 (kg/m^3)
-    double Cd_ = 0.3; // 阻力系数
-    double A_ = 0.0005; // 弹头迎风面积 (m^2)
-    double mass_ = 0.02; // 弹头质量 (kg)
+
 
 protected:
     // Calculate the trajectory of the bullet, return the vertical impact point
@@ -72,16 +68,7 @@ protected:
         const noexcept override;
 };
 
-// RK4Compensator uses the Runge-Kutta 4th order method to calculate trajectory
-class RK4Compensator: public TrajectoryCompensator {
-public:
-    double getFlyingTime(const Eigen::Vector3d& target_position, const double bullet_speed)
-        const noexcept override;
 
-protected:
-    double calculateTrajectory(const double x, const double angle, const double bullet_speed)
-        const noexcept override;
-};
 
 // Factory class for trajectory compensator
 class CompensatorFactory: public TrajectoryCompensator {
@@ -91,9 +78,7 @@ public:
             return std::make_shared<IdealCompensator>();
         } else if (type == "resistance") {
             return std::make_shared<ResistanceCompensator>();
-        } else if (type == "rk4") {
-            return std::make_shared<RK4Compensator>();
-        } else {
+        }else {
             return nullptr;
         }
     }

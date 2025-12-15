@@ -17,6 +17,7 @@ TARGET_PATH="/home/${REMOTE_USER}/wust_vl"
 rsync -avz \
     --exclude='.cache/' \
     --exclude='.vscode/' \
+    --exclude='.git/' \
     --exclude='bin/' \
     --exclude='build/' \
     --exclude='CMakeLists.txt' \
