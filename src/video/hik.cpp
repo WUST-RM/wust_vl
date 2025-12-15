@@ -382,8 +382,7 @@ void HikCamera::hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThr
                 ImageFrame frame;
                 auto current_time = std::chrono::steady_clock::now();
 
-                auto half_exposure =
-                    std::chrono::microseconds((long)(last_exposure_time_ / 2));
+                auto half_exposure = std::chrono::microseconds((long)(last_exposure_time_ / 2));
                 frame.timestamp = current_time - half_exposure;
                 frame.width = out_frame.stFrameInfo.nWidth;
                 frame.height = out_frame.stFrameInfo.nHeight;
@@ -511,9 +510,8 @@ bool HikCamera::read() {
     }
     const auto& map_ref = use_rgb_ ? PIXEL_MAP_RGB : PIXEL_MAP_BGR;
     frame.pixel_type = map_ref.at(pixel_type);
-    auto half_exposure =
-                    std::chrono::microseconds((long)(last_exposure_time_ / 2));
-    frame.timestamp = std::chrono::steady_clock::now()-half_exposure;
+    auto half_exposure = std::chrono::microseconds((long)(last_exposure_time_ / 2));
+    frame.timestamp = std::chrono::steady_clock::now() - half_exposure;
 
     if (on_frame_callback_) {
         on_frame_callback_(frame);
@@ -556,9 +554,8 @@ ImageFrame HikCamera::readImage() {
     }
     const auto& map_ref = use_rgb_ ? PIXEL_MAP_RGB : PIXEL_MAP_BGR;
     frame.pixel_type = map_ref.at(pixel_type);
-    auto half_exposure =
-                    std::chrono::microseconds((long)(last_exposure_time_ / 2));
-    frame.timestamp = std::chrono::steady_clock::now()-half_exposure;
+    auto half_exposure = std::chrono::microseconds((long)(last_exposure_time_ / 2));
+    frame.timestamp = std::chrono::steady_clock::now() - half_exposure;
 
     MV_CC_FreeImageBuffer(camera_handle_, &out_frame);
     return frame;

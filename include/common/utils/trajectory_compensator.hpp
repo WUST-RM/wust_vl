@@ -37,8 +37,6 @@ public:
     double gravity_ = 9.8;
     double resistance_ = 0.01;
 
-
-
 protected:
     // Calculate the trajectory of the bullet, return the vertical impact point
     virtual double
@@ -68,8 +66,6 @@ protected:
         const noexcept override;
 };
 
-
-
 // Factory class for trajectory compensator
 class CompensatorFactory: public TrajectoryCompensator {
 public:
@@ -78,7 +74,7 @@ public:
             return std::make_shared<IdealCompensator>();
         } else if (type == "resistance") {
             return std::make_shared<ResistanceCompensator>();
-        }else {
+        } else {
             return nullptr;
         }
     }

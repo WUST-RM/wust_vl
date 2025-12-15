@@ -19,11 +19,7 @@ public:
         stop();
     }
 
-    void start(
-        double rate_hz,
-        Callback callback,
-        std::chrono::microseconds spin_margin = std::chrono::microseconds(200)
-    ) {
+    void start(double rate_hz, Callback callback) {
         stop();
 
         interval_ = std::chrono::microseconds(static_cast<int64_t>(1e6 / rate_hz));
@@ -32,29 +28,35 @@ public:
         thread_ = wust_vl_concurrency::MonitoredThread::create(
             "TimerThread",
             [this](std::shared_ptr<wust_vl_concurrency::MonitoredThread> self) {
-                auto next_time = std::chrono::steady_clock::now() + interval_;
-                auto last_time = std::chrono::steady_clock::now();
+                using clock = std::chrono::steady_clock;
+
+                auto start_time = clock::now();
+                auto last_exec_time = start_time;
+                auto next_time = start_time + interval_;
+
+                constexpr int MAX_CATCHUP_FRAMES = 10;
+                const auto max_catchup = interval_ * MAX_CATCHUP_FRAMES;
 
                 while (self->isAlive()) {
-                    auto now = std::chrono::steady_clock::now();
+                    std::this_thread::sleep_until(next_time);
 
-                    if (now < next_time) {
-                        auto sleep_dur = next_time - now - std::chrono::milliseconds(1);
-                        if (sleep_dur.count() > 0)
-                            std::this_thread::sleep_for(sleep_dur);
-                    }
-
-                    now = std::chrono::steady_clock::now();
+                    auto exec_time = clock::now();
                     double dt_ms =
-                        std::chrono::duration<double, std::milli>(now - last_time).count();
-                    last_time = now;
+                        std::chrono::duration<double, std::milli>(exec_time - last_exec_time)
+                            .count();
+                    last_exec_time = exec_time;
 
                     self->heartbeat();
 
                     if (callback_)
                         callback_(dt_ms);
 
-                    next_time += interval_;
+                    auto ideal_next_time = next_time + interval_;
+
+                    auto min_next_time = last_exec_time;
+                    auto max_next_time = last_exec_time + max_catchup;
+
+                    next_time = std::clamp(ideal_next_time, min_next_time, max_next_time);
                 }
             }
         );

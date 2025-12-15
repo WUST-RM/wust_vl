@@ -108,4 +108,3 @@ double ResistanceCompensator::getFlyingTime(
 
     return t;
 }
-
