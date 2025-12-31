@@ -26,6 +26,7 @@ struct Camera::Impl {
                     config["hik_camera"]["reverse_y"].as<bool>(false)
                 );
                 hik_camera_->setRgb(config_["hik_camera"]["rgb"].as<bool>(false));
+                hik_camera_->setEA(config_["hik_camera"]["ea"].as<bool>(false));
                 return true;
             }
 

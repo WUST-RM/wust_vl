@@ -57,10 +57,14 @@ public:
     void setRgb(bool rgb) {
         use_rgb_ = rgb;
     }
+    void setEA(bool ea) {
+        use_ea_ = ea;
+    }
 
 private:
     void hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThread> self);
     bool use_rgb_ = false;
+    bool use_ea_ = false;
     void* camera_handle_;
     int fail_count_;
     MV_IMAGE_BASIC_INFO img_info_;
@@ -85,7 +89,7 @@ private:
     TimedQueue<ImageFrame> img_queue_ { 1.0 }; // 1s 有效时间窗口
     std::shared_ptr<wust_vl_concurrency::MonitoredThread> process_thread_;
     void hikProcessLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThread> self);
-    const std::unordered_map<MvGvspPixelType, int> PIXEL_MAP_RGB = {
+    const std::unordered_map<MvGvspPixelType, int> PIXEL_MAP_RGB_EA = {
         { PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGR2RGB_EA },
         { PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2RGB_EA },
         { PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2RGB_EA },
@@ -93,12 +97,27 @@ private:
         { PixelType_Gvsp_RGB8_Packed, -1 },
         { PixelType_Gvsp_Mono8, cv::COLOR_GRAY2RGB },
     };
-
-    const std::unordered_map<MvGvspPixelType, int> PIXEL_MAP_BGR = {
+    const std::unordered_map<MvGvspPixelType, int> PIXEL_MAP_RGB = {
+        { PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGR2RGB },
+        { PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2RGB },
+        { PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2RGB },
+        { PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2RGB },
+        { PixelType_Gvsp_RGB8_Packed, -1 },
+        { PixelType_Gvsp_Mono8, cv::COLOR_GRAY2RGB },
+    };
+    const std::unordered_map<MvGvspPixelType, int> PIXEL_MAP_BGR_EA = {
         { PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGR2BGR_EA },
         { PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2BGR_EA },
         { PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2BGR_EA },
         { PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2BGR_EA },
+        { PixelType_Gvsp_RGB8_Packed, -1 },
+        { PixelType_Gvsp_Mono8, cv::COLOR_GRAY2BGR },
+    };
+    const std::unordered_map<MvGvspPixelType, int> PIXEL_MAP_BGR = {
+        { PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGR2BGR },
+        { PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2BGR },
+        { PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2BGR },
+        { PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2BGR },
         { PixelType_Gvsp_RGB8_Packed, -1 },
         { PixelType_Gvsp_Mono8, cv::COLOR_GRAY2BGR },
     };

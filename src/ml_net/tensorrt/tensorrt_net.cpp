@@ -46,7 +46,7 @@ struct TensorRTNet::Impl {
         output_idx_ = 1;
         TRT_ASSERT(context_->setInputShape(
             input_name_,
-            nvinfer1::Dims4 { 1, 3, params_.input_h, params_.input_w }
+            params_.input_dims
         ));
         TRT_ASSERT(context_->allInputShapesSpecified());
 
