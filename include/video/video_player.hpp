@@ -12,32 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
-#include "video/image.hpp"
+#include "icamera.hpp"
 #include <atomic>
 #include <functional>
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <thread>
+#include <yaml-cpp/yaml.h>
 namespace wust_vl_video {
-class VideoPlayer {
+class VideoPlayer: public ICameraDevice {
 public:
-    using FrameCallback = std::function<void(ImageFrame&)>;
+    VideoPlayer();
+    bool loadConfig(const YAML::Node& config) override;
 
-    VideoPlayer(
-        const std::string& video_path,
-        int frame_rate = 30,
-        int start_frame = 0,
-        bool loop = true
-    );
-
-    void setCallback(FrameCallback cb);
-    bool start();
-    void stop();
-    bool read();
-    void enableTriggerMode(bool enable);
-    void setCvtFlag(bool use_cvt) {
-        use_cvt_ = use_cvt;
-    }
+    void setFrameCallback(FrameCallback cb) override;
+    void start() override;
+    void stop() override;
+    bool read() override;
+    ImageFrame readImage() override;
     ~VideoPlayer();
 
 private:

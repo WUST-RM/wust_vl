@@ -44,7 +44,7 @@ inline std::string getOriginalUsername() {
 HikCamera::HikCamera(): camera_handle_(nullptr), fail_count_(0) {}
 
 HikCamera::~HikCamera() {
-    stopCamera();
+    stop();
 
     if (capture_thread_) {
         capture_thread_->stop();
@@ -62,7 +62,100 @@ HikCamera::~HikCamera() {
 
     WUST_INFO(hik_logger_) << "Camera destroyed!";
 }
+bool HikCamera::loadConfig(const YAML::Node& config) {
+    config_ = config;
+    if (capture_thread_) {
+        capture_thread_->heartbeat();
+    }
+    std::string target_sn = config["target_sn"].as<std::string>();
+    if (!initializeCamera(target_sn)) {
+        WUST_ERROR("hik_camera") << "Hik Camera initialization failed.";
+        return false;
+    }
 
+    double acquisition_frame_rate = config["acquisition_frame_rate"].as<double>();
+    double exposure_time = config["exposure_time"].as<double>();
+    double gain = config["gain"].as<double>();
+    double gamma = config["gamma"].as<double>();
+    const std::string adc_bit_depth = config["adc_bit_depth"].as<std::string>();
+    const std::string pixel_format = config["pixel_format"].as<std::string>();
+    bool acquisition_frame_rate_enable = config["acquisition_frame_rate_enable"].as<bool>();
+    bool reverse_x = config["reverse_x"].as<bool>();
+    bool reverse_y = config["reverse_y"].as<bool>();
+    MVCC_FLOATVALUE f_value;
+    int status = MV_CC_SetEnumValueByString(camera_handle_, "PixelFormat", pixel_format.c_str());
+    if (status == MV_OK) {
+        WUST_INFO(hik_logger_) << "Pixel Format set to " << pixel_format;
+    } else {
+        WUST_ERROR(hik_logger_) << "Failed to set Pixel Format, status = " << status;
+    }
+
+    status = MV_CC_SetEnumValueByString(camera_handle_, "ADCBitDepth", adc_bit_depth.c_str());
+    if (status == MV_OK) {
+        WUST_INFO(hik_logger_) << "ADC Bit Depth set to " << adc_bit_depth;
+    } else {
+        WUST_ERROR(hik_logger_) << "Failed to set ADC Bit Depth, status = " << status;
+    }
+
+    MV_CC_SetBoolValue(camera_handle_, "AcquisitionFrameRateEnable", true);
+    MV_CC_SetFloatValue(camera_handle_, "AcquisitionFrameRate", acquisition_frame_rate);
+    WUST_INFO(hik_logger_) << "Acquisition frame rate: " << acquisition_frame_rate;
+
+    MV_CC_SetFloatValue(camera_handle_, "ExposureTime", exposure_time);
+    WUST_INFO(hik_logger_) << "Exposure time: " << exposure_time;
+
+    if (int ret = MV_CC_GetFloatValue(camera_handle_, "Gain", &f_value); ret == MV_OK) {
+        double clamped =
+            std::clamp(gain, static_cast<double>(f_value.fMin), static_cast<double>(f_value.fMax));
+        MV_CC_SetFloatValue(camera_handle_, "Gain", clamped);
+        WUST_INFO(hik_logger_) << "Gain: " << clamped;
+    } else {
+        WUST_ERROR(hik_logger_) << "Failed to set Gain, status = " << ret;
+    }
+
+    int ret = MV_CC_SetBoolValue(camera_handle_, "GammaEnable", true);
+
+    if (ret == MV_OK) {
+        WUST_INFO(hik_logger_) << "Set GammaEnable success";
+    } else {
+        WUST_ERROR(hik_logger_) << "Failed to set GammaEnable, status = " << ret;
+    }
+    if (int ret = MV_CC_GetFloatValue(camera_handle_, "Gamma", &f_value); ret == MV_OK) {
+        double clamped =
+            std::clamp(gamma, static_cast<double>(f_value.fMin), static_cast<double>(f_value.fMax));
+        MV_CC_SetFloatValue(camera_handle_, "Gamma", clamped);
+        WUST_INFO(hik_logger_) << "Set Gamma to " << clamped;
+    } else {
+        WUST_ERROR(hik_logger_) << "Failed to set Gamma, status = " << ret;
+    }
+
+    if (!acquisition_frame_rate_enable) {
+        MV_CC_SetBoolValue(camera_handle_, "AcquisitionFrameRateEnable", false);
+    }
+    MV_CC_SetBoolValue(camera_handle_, "ReverseX", reverse_x);
+    WUST_INFO(hik_logger_) << "ReverseX set to " << reverse_x;
+
+    MV_CC_SetBoolValue(camera_handle_, "ReverseY", reverse_y);
+    WUST_INFO(hik_logger_) << "ReverseY set to " << reverse_y;
+    last_frame_rate_ = acquisition_frame_rate;
+    last_exposure_time_ = exposure_time;
+    last_gain_ = gain;
+    last_gamma_ = gamma;
+    last_adc_bit_depth_ = adc_bit_depth;
+    last_pixel_format_ = pixel_format;
+    last_acquisition_frame_rate_enable_ = acquisition_frame_rate_enable;
+    last_reverse_x_ = reverse_x;
+    last_reverse_y_ = reverse_y;
+
+
+    use_rgb_ = config["use_rgb"].as<bool>();
+    use_ea_ = config["use_ea"].as<bool>();
+    use_raw_ = config["use_raw"].as<bool>();
+    WUST_INFO(hik_logger_) << "Camera parameters set successfully!";
+
+    
+    return true;
+}
 bool HikCamera::initializeCamera(const std::string& target_sn) {
     last_target_sn_ = target_sn;
 
@@ -155,6 +248,7 @@ bool HikCamera::initializeCamera(const std::string& target_sn) {
         WUST_INFO(hik_logger_) << "Camera initialized successfully";
         return true;
     }
+    return false;
 }
 
 bool HikCamera::enableTrigger(TriggerType type, const std::string& source, int64_t activation) {
@@ -180,93 +274,7 @@ void HikCamera::disableTrigger() {
     MV_CC_SetEnumValueByString(camera_handle_, "TriggerMode", "Off");
     WUST_INFO(hik_logger_) << "Trigger disabled, continuous mode.";
 }
-// 设置相机参数：帧率、曝光、增益、ADC位深及像素格式（这里硬编码参数，可按需修改）
-void HikCamera::setParameters(
-    double acquisition_frame_rate,
-    double exposure_time,
-    double gain,
-    double gamma,
-    const std::string& adc_bit_depth,
-    const std::string& pixel_format,
-    bool acquisition_frame_rate_enable,
-    bool reverse_x,
-    bool reverse_y
-) {
-    if (capture_thread_) {
-        capture_thread_->heartbeat();
-    }
-    MVCC_FLOATVALUE f_value;
-    // 设置像素格式
-    int status = MV_CC_SetEnumValueByString(camera_handle_, "PixelFormat", pixel_format.c_str());
-    if (status == MV_OK) {
-        WUST_INFO(hik_logger_) << "Pixel Format set to " << pixel_format;
-    } else {
-        WUST_ERROR(hik_logger_) << "Failed to set Pixel Format, status = " << status;
-    }
 
-    // 设置 ADC 位深
-    status = MV_CC_SetEnumValueByString(camera_handle_, "ADCBitDepth", adc_bit_depth.c_str());
-    if (status == MV_OK) {
-        WUST_INFO(hik_logger_) << "ADC Bit Depth set to " << adc_bit_depth;
-    } else {
-        WUST_ERROR(hik_logger_) << "Failed to set ADC Bit Depth, status = " << status;
-    }
-
-    // 设置采集帧率
-    MV_CC_SetBoolValue(camera_handle_, "AcquisitionFrameRateEnable", true);
-    MV_CC_SetFloatValue(camera_handle_, "AcquisitionFrameRate", acquisition_frame_rate);
-    WUST_INFO(hik_logger_) << "Acquisition frame rate: " << acquisition_frame_rate;
-
-    // 设置曝光时间（单位：微秒）
-    MV_CC_SetFloatValue(camera_handle_, "ExposureTime", exposure_time);
-    WUST_INFO(hik_logger_) << "Exposure time: " << exposure_time;
-
-    // 设置增益
-    if (int ret = MV_CC_GetFloatValue(camera_handle_, "Gain", &f_value); ret == MV_OK) {
-        double clamped =
-            std::clamp(gain, static_cast<double>(f_value.fMin), static_cast<double>(f_value.fMax));
-        MV_CC_SetFloatValue(camera_handle_, "Gain", clamped);
-        WUST_INFO(hik_logger_) << "Gain: " << clamped;
-    } else {
-        WUST_ERROR(hik_logger_) << "Failed to set Gain, status = " << ret;
-    }
-
-    int ret = MV_CC_SetBoolValue(camera_handle_, "GammaEnable", true);
-
-    if (ret == MV_OK) {
-        WUST_INFO(hik_logger_) << "Set GammaEnable success";
-    } else {
-        WUST_ERROR(hik_logger_) << "Failed to set GammaEnable, status = " << ret;
-    }
-    // 设置gamma
-    if (int ret = MV_CC_GetFloatValue(camera_handle_, "Gamma", &f_value); ret == MV_OK) {
-        double clamped =
-            std::clamp(gamma, static_cast<double>(f_value.fMin), static_cast<double>(f_value.fMax));
-        MV_CC_SetFloatValue(camera_handle_, "Gamma", clamped);
-        WUST_INFO(hik_logger_) << "Set Gamma to " << clamped;
-    } else {
-        WUST_ERROR(hik_logger_) << "Failed to set Gamma, status = " << ret;
-    }
-
-    if (!acquisition_frame_rate_enable) {
-        MV_CC_SetBoolValue(camera_handle_, "AcquisitionFrameRateEnable", false);
-    }
-    MV_CC_SetBoolValue(camera_handle_, "ReverseX", reverse_x);
-    WUST_INFO(hik_logger_) << "ReverseX set to " << reverse_x;
-
-    MV_CC_SetBoolValue(camera_handle_, "ReverseY", reverse_y);
-    WUST_INFO(hik_logger_) << "ReverseY set to " << reverse_y;
-    last_frame_rate_ = acquisition_frame_rate;
-    last_exposure_time_ = exposure_time;
-    last_gain_ = gain;
-    last_gamma_ = gamma;
-    last_adc_bit_depth_ = adc_bit_depth;
-    last_pixel_format_ = pixel_format;
-    last_acquisition_frame_rate_enable_ = acquisition_frame_rate_enable;
-    last_reverse_x_ = reverse_x;
-    last_reverse_y_ = reverse_y;
-    WUST_INFO(hik_logger_) << "Camera parameters set successfully!";
-}
 void HikCamera::setExposureTime(double exposure_time) {
     if (std::abs(exposure_time - last_exposure_time_) < 10.0
         || exposure_time <= 0) // 避免频繁设置曝光时间
@@ -276,7 +284,7 @@ void HikCamera::setExposureTime(double exposure_time) {
     last_exposure_time_ = exposure_time;
 }
 
-void HikCamera::startCamera() {
+void HikCamera::start() {
     int n_ret = MV_CC_StartGrabbing(camera_handle_);
     if (n_ret != MV_OK) {
         WUST_ERROR(hik_logger_) << "Failed to start camera grabbing!";
@@ -296,7 +304,6 @@ void HikCamera::startCamera() {
             }
         );
 
-        // 注册到全局管理器
         wust_vl_concurrency::ThreadManager::instance().registerThread(capture_thread_);
         process_thread_ = wust_vl_concurrency::MonitoredThread::create(
             "HikProcessThread",
@@ -308,7 +315,7 @@ void HikCamera::startCamera() {
     }
 }
 
-bool HikCamera::restartCamera() {
+bool HikCamera::restart() {
     WUST_WARN(hik_logger_) << "Restarting camera from scratch...";
     if (capture_thread_) {
         capture_thread_->heartbeat();
@@ -319,23 +326,7 @@ bool HikCamera::restartCamera() {
     camera_handle_ = nullptr;
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
-
-    if (!initializeCamera(last_target_sn_)) {
-        WUST_ERROR(hik_logger_) << "Failed to re-initialize camera.";
-        return false;
-    }
-
-    setParameters(
-        last_frame_rate_,
-        last_exposure_time_,
-        last_gain_,
-        last_gamma_,
-        last_adc_bit_depth_,
-        last_pixel_format_,
-        last_acquisition_frame_rate_enable_,
-        last_reverse_x_,
-        last_reverse_y_
-    );
+    loadConfig(config_);
 
     int n_ret = MV_CC_StartGrabbing(camera_handle_);
     if (n_ret != MV_OK) {
@@ -352,6 +343,7 @@ void HikCamera::hikProcessLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThr
         self->heartbeat();
         if (img_queue_.pop_valid(frame)) {
             if (on_frame_callback_) {
+                frame.src_img = convertToMat(frame, use_raw_);
                 on_frame_callback_(frame);
             }
         } else {
@@ -397,11 +389,9 @@ void HikCamera::hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThr
                 } else if (frame.img_type == CV_8UC1) {
                     frame.step = frame.width;
                 }
-                const auto& map_ref = use_rgb_ ? (use_ea_ ? PIXEL_MAP_RGB_EA : PIXEL_MAP_RGB) : (use_ea_ ? PIXEL_MAP_BGR_EA : PIXEL_MAP_BGR);
+                const auto& map_ref = use_rgb_ ? (use_ea_ ? PIXEL_MAP_RGB_EA : PIXEL_MAP_RGB)
+                                               : (use_ea_ ? PIXEL_MAP_BGR_EA : PIXEL_MAP_BGR);
                 frame.pixel_type = map_ref.at(pixel_type);
-                // if (on_frame_callback_) {
-                //     on_frame_callback_(frame);
-                // }
                 img_queue_.push(std::move(frame));
 
                 MV_CC_FreeImageBuffer(camera_handle_, &out_frame);
@@ -427,7 +417,7 @@ void HikCamera::hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThr
                         {
                             WUST_ERROR(hik_logger_)
                                 << "Low FPS persisted for 5s. Restarting camera...";
-                            if (restartCamera()) {
+                            if (restart()) {
                                 in_low_frame_rate_state_ = false;
                                 WUST_INFO(hik_logger_) << "Camera restarted successfully";
                             } else {
@@ -453,7 +443,7 @@ void HikCamera::hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThr
                         .count()
                     > 5)
                 {
-                    if (!restartCamera()) {
+                    if (!restart()) {
                         WUST_ERROR(hik_logger_)
                             << "Failed to restart camera after hardware failure.";
                         std::exit(EXIT_FAILURE);
@@ -474,7 +464,7 @@ void HikCamera::hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThr
     WUST_INFO(hik_logger_) << "Exiting image capture loop.";
 }
 
-void HikCamera::stopCamera() {
+void HikCamera::stop() {
     stop_signal_ = true;
 }
 bool HikCamera::read() {
@@ -508,7 +498,8 @@ bool HikCamera::read() {
     } else if (frame.img_type == CV_8UC1) {
         frame.step = frame.width;
     }
-     const auto& map_ref = use_rgb_ ? (use_ea_ ? PIXEL_MAP_RGB_EA : PIXEL_MAP_RGB) : (use_ea_ ? PIXEL_MAP_BGR_EA : PIXEL_MAP_BGR);
+    const auto& map_ref = use_rgb_ ? (use_ea_ ? PIXEL_MAP_RGB_EA : PIXEL_MAP_RGB)
+                                   : (use_ea_ ? PIXEL_MAP_BGR_EA : PIXEL_MAP_BGR);
     frame.pixel_type = map_ref.at(pixel_type);
     auto half_exposure = std::chrono::microseconds((long)(last_exposure_time_ / 2));
     frame.timestamp = std::chrono::steady_clock::now() - half_exposure;
@@ -518,7 +509,6 @@ bool HikCamera::read() {
     }
 
     MV_CC_FreeImageBuffer(camera_handle_, &out_frame);
-    return true;
 
     return false;
 }
@@ -552,7 +542,8 @@ ImageFrame HikCamera::readImage() {
     } else if (frame.img_type == CV_8UC1) {
         frame.step = frame.width;
     }
-     const auto& map_ref = use_rgb_ ? (use_ea_ ? PIXEL_MAP_RGB_EA : PIXEL_MAP_RGB) : (use_ea_ ? PIXEL_MAP_BGR_EA : PIXEL_MAP_BGR);
+    const auto& map_ref = use_rgb_ ? (use_ea_ ? PIXEL_MAP_RGB_EA : PIXEL_MAP_RGB)
+                                   : (use_ea_ ? PIXEL_MAP_BGR_EA : PIXEL_MAP_BGR);
     frame.pixel_type = map_ref.at(pixel_type);
     auto half_exposure = std::chrono::microseconds((long)(last_exposure_time_ / 2));
     frame.timestamp = std::chrono::steady_clock::now() - half_exposure;

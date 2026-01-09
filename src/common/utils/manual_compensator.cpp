@@ -74,7 +74,7 @@ std::vector<double> ManualCompensator::angleHardCorrect(const double dist, const
                      target_height_node->yaw_offset + base_yaw_ };
         }
     }
-    
+
     return { base_pitch_, base_yaw_ };
 }
 

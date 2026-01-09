@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
+#include "common/utils/logger.hpp"
 #include "hik.hpp"
 #include "video_player.hpp"
 namespace wust_vl_video {
@@ -34,20 +35,52 @@ inline CameraType string2CameraType(const std::string& str) {
 }
 class Camera {
 public:
-    Camera();
-    ~Camera();
-    bool init(const YAML::Node& config);
-    void start();
-    void stop();
-    void read();
-    ImageFrame readImage();
-    void enableHikTrigger(TriggerType type, const std::string& source, int64_t activation);
-    void setHikExposureTime(double exposure_time);
-    void setHikRgb(bool rgb);
-    double getHikExposureTime() const;
-    void setFrameCallback(std::function<void(ImageFrame&)> cb);
-    void setVideoPlayerCvtFlag(bool use_cvt);
-    struct Impl;
-    std::unique_ptr<Impl> _impl;
+    bool init(const YAML::Node& config) {
+        config_ = config;
+        type_ = string2CameraType(config["type"].as<std::string>());
+        switch (type_) {
+            case CameraType::HIK:
+                device_ = std::make_shared<HikCamera>();
+                device_->loadConfig(config["hik_camera"]);
+                break;
+
+            case CameraType::VIDEO_PLAYER:
+                device_ = std::make_shared<VideoPlayer>();
+                device_->loadConfig(config["video_player"]);
+                break;
+        }
+        WUST_INFO("camera")<<"init camera success";
+        return true;
+    }
+    void read() {
+        if (device_)
+            device_->read();
+    }
+    ImageFrame readImage() {
+        if (device_)
+            return device_->readImage();
+        return {};
+    }
+    void start() {
+        if (device_)
+            device_->start();
+    }
+    void stop() {
+        if (device_)
+            device_->stop();
+    }
+
+    void setFrameCallback(ICameraDevice::FrameCallback cb) {
+        if (device_)
+            device_->setFrameCallback(cb);
+    }
+
+    ICameraDevice* getDevice() const {
+        return device_.get();
+    }
+
+    CameraType type_;
+    std::shared_ptr<ICameraDevice> device_;
+    YAML::Node config_;
 };
 } // namespace wust_vl_video

@@ -16,55 +16,39 @@
 #include "MvCameraControl.h"
 #include "common/concurrency/monitored_thread.hpp"
 #include "common/concurrency/queues.hpp"
-#include "video/image.hpp"
+#include "icamera.hpp"
 #include <thread>
 #include <yaml-cpp/yaml.h>
 namespace wust_vl_video {
 enum class TriggerType { None, Software, Hardware };
-class HikCamera {
+class HikCamera: public ICameraDevice {
 public:
     HikCamera();
     ~HikCamera();
-    bool init(const YAML::Node& config);
-    void setFrameCallback(std::function<void(ImageFrame&)> cb) {
+    bool loadConfig(const YAML::Node& config) override;
+    void setFrameCallback(FrameCallback cb) override {
         on_frame_callback_ = std::move(cb);
     }
 
     bool initializeCamera(const std::string& target_sn);
-    void setParameters(
-        double acquisition_frame_rate,
-        double exposure_time,
-        double gain,
-        double gamma,
-        const std::string& adc_bit_depth,
-        const std::string& pixel_format,
-        bool acquisition_frame_rate_enable,
-        bool reverse_x,
-        bool reverse_y
-    );
     void setExposureTime(double exposure_time);
     double getExposureTime() const {
         return last_exposure_time_;
     }
-    void startCamera();
-    bool restartCamera();
-    void stopCamera();
+    void start() override;
+    bool restart();
+    void stop() override;
     bool enableTrigger(TriggerType type, const std::string& source, int64_t activation);
     void disableTrigger();
-    bool read();
-    ImageFrame readImage();
-    void setPixelFormat(const std::string& pixel_format);
-    void setRgb(bool rgb) {
-        use_rgb_ = rgb;
-    }
-    void setEA(bool ea) {
-        use_ea_ = ea;
-    }
+    bool read() override;
+    ImageFrame readImage() override;
 
 private:
     void hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThread> self);
+    YAML::Node config_;
     bool use_rgb_ = false;
     bool use_ea_ = false;
+    bool use_raw_ = false;
     void* camera_handle_;
     int fail_count_;
     MV_IMAGE_BASIC_INFO img_info_;
@@ -85,7 +69,7 @@ private:
     int video_fps_;
     int expected_width_ = 0;
     int expected_height_ = 0;
-    std::function<void(ImageFrame&)> on_frame_callback_;
+    FrameCallback on_frame_callback_;
     TimedQueue<ImageFrame> img_queue_ { 1.0 }; // 1s 有效时间窗口
     std::shared_ptr<wust_vl_concurrency::MonitoredThread> process_thread_;
     void hikProcessLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThread> self);

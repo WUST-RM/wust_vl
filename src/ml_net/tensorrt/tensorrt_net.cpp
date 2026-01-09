@@ -44,10 +44,7 @@ struct TensorRTNet::Impl {
         output_name_ = engine_->getIOTensorName(1);
         input_idx_ = 0;
         output_idx_ = 1;
-        TRT_ASSERT(context_->setInputShape(
-            input_name_,
-            params_.input_dims
-        ));
+        TRT_ASSERT(context_->setInputShape(input_name_, params_.input_dims));
         TRT_ASSERT(context_->allInputShapesSpecified());
 
         input_dims_ = context_->getTensorShape(input_name_);
