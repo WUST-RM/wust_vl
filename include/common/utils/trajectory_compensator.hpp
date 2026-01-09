@@ -17,10 +17,19 @@
 #include <Eigen/Dense>
 #include <memory>
 #include <tuple>
+#include <yaml-cpp/yaml.h>
 class TrajectoryCompensator {
 public:
     TrajectoryCompensator() = default;
     virtual ~TrajectoryCompensator() = default;
+    void load(const YAML::Node& cfg)
+    {
+        iteration_times_ = cfg["iteration_times"].as<int>(iteration_times_);
+        gravity_ = cfg["gravity"].as<double>(gravity_);
+        resistance_ = cfg["resistance"].as<double>(resistance_);
+        k1_ = cfg["k1"].as<double>(k1_);
+    }
+
 
     // Compensate the trajectory of the bullet, return the pitch increment
     bool
@@ -36,6 +45,7 @@ public:
     int iteration_times_ = 20;
     double gravity_ = 9.8;
     double resistance_ = 0.01;
+    double k1_ = 0.0190; //大弹丸
 
 protected:
     // Calculate the trajectory of the bullet, return the vertical impact point
@@ -65,6 +75,15 @@ protected:
     double calculateTrajectory(const double x, const double angle, const double bullet_speed)
         const noexcept override;
 };
+class K1Compensator: public TrajectoryCompensator {
+public:
+    double getFlyingTime(const Eigen::Vector3d& target_position, const double bullet_speed)
+        const noexcept override;
+
+protected:
+    double calculateTrajectory(const double x, const double angle, const double bullet_speed)
+        const noexcept override;
+};
 
 // Factory class for trajectory compensator
 class CompensatorFactory: public TrajectoryCompensator {
@@ -74,6 +93,8 @@ public:
             return std::make_shared<IdealCompensator>();
         } else if (type == "resistance") {
             return std::make_shared<ResistanceCompensator>();
+        } else if (type == "k1") {
+            return std::make_shared<K1Compensator>();
         } else {
             return nullptr;
         }

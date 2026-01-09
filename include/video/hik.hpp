@@ -127,6 +127,7 @@ public:
     inline type get##param() const { \
         return param##_val; \
     }
+
     bool loadConfig(const YAML::Node& config) override;
     void setFrameCallback(FrameCallback cb) override {
         on_frame_callback_ = std::move(cb);
@@ -166,8 +167,8 @@ private:
     std::string target_sn_;
     bool in_low_frame_rate_state_;
     TriggerType trigger_type_ = TriggerType::None;
-    std::string trigger_source_; 
-    int64_t trigger_activation_; 
+    std::string trigger_source_;
+    int64_t trigger_activation_;
     std::atomic<bool> stop_signal_ { false };
     int video_fps_;
     int expected_width_ = 0;

@@ -108,3 +108,23 @@ double ResistanceCompensator::getFlyingTime(
 
     return t;
 }
+double K1Compensator ::getFlyingTime(
+    const Eigen::Vector3d& target_position,
+    const double bullet_speed
+) const noexcept {
+    double distance = std::sqrt(
+        target_position(0) * target_position(0) + target_position(1) * target_position(1)
+    );
+    double angle = std::atan2(target_position(2), distance);
+    double k1 = k1_;
+    double t = (std::exp(k1 * distance) - 1) / (k1 * bullet_speed * std::cos(angle));
+    return t;
+}
+double
+K1Compensator ::calculateTrajectory(const double x, const double angle, const double bullet_speed)
+    const noexcept {
+    double k1 = k1_;
+    double t = (std::exp(k1 * x) - 1) / (k1 * bullet_speed * std::cos(angle));
+    double y = bullet_speed * std::sin(angle) * t - 0.5 * gravity_ * t * t;
+    return y;
+}
