@@ -16,11 +16,107 @@
 #include "MvCameraControl.h"
 #include "common/concurrency/monitored_thread.hpp"
 #include "common/concurrency/queues.hpp"
+#include "common/utils/logger.hpp"
 #include "icamera.hpp"
 #include <thread>
 #include <yaml-cpp/yaml.h>
 namespace wust_vl_video {
 enum class TriggerType { None, Software, Hardware };
+inline TriggerType string2TriggerType(const std::string& str) {
+    static const std::unordered_map<std::string, TriggerType> lut = {
+        { "none", TriggerType::None },
+        { "software", TriggerType::Software },
+        { "hardware", TriggerType::Hardware }
+    };
+
+    std::string key = str;
+    std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) {
+        return std::tolower(c);
+    });
+
+    auto it = lut.find(key);
+    return (it != lut.end()) ? it->second : TriggerType::None;
+}
+
+// enum -> string
+inline std::string triggerType2String(TriggerType type) {
+    switch (type) {
+        case TriggerType::None:
+            return "None";
+        case TriggerType::Software:
+            return "Software";
+        case TriggerType::Hardware:
+            return "Hardware";
+    }
+    return "None";
+}
+#define HIK_SET_FLOAT_RANGE(camera_handle,param, val) do { \
+    MVCC_FLOATVALUE _fv{}; \
+    int _s = MV_CC_GetFloatValue(camera_handle, param, &_fv); \
+    if (_s == MV_OK) { \
+        double _c = std::clamp((double)val, (double)_fv.fMin, (double)_fv.fMax); \
+        int _r = MV_CC_SetFloatValue(camera_handle, param, _c); \
+        if (_r == MV_OK) WUST_INFO("hik_camera") << param << " set to " << _c; \
+        else WUST_ERROR("hik_camera") << "Failed to set " << param << ", status=" << _r; \
+    } else { \
+        WUST_ERROR("hik_camera") << "Failed to get " << param << " range, status=" << _s; \
+    } \
+} while(0)
+#define HIK_SET_INT_RANGE(camera_handle,param, val) do { \
+    MVCC_INTVALUE _iv{}; \
+    int _s = MV_CC_GetIntValue(camera_handle, param, &_iv); \
+    if (_s == MV_OK) { \
+        int64_t _c = std::clamp((int64_t)val, (int64_t)_iv.nMin, (int64_t)_iv.nMax); \
+        int _r = MV_CC_SetIntValue(camera_handle, param, _c); \
+        if (_r == MV_OK) { \
+            WUST_INFO("hik_camera") << param << " set to " << _c; \
+        } else { \
+            WUST_ERROR("hik_camera") << "Failed to set " << param << ", status=" << _r; \
+        } \
+    } else { \
+        WUST_ERROR("hik_camera") << "Failed to get " << param << " range, status=" << _s; \
+    } \
+} while(0)
+#define HIK_SET_BOOL(camera_handle,param, val) do { \
+    int _r = MV_CC_SetBoolValue(camera_handle, param, (bool)(val)); \
+    if (_r == MV_OK) { \
+        WUST_INFO("hik_camera") << param << " set to " << ((val) ? 1 : 0); \
+    } else { \
+        WUST_ERROR("hik_camera") << "Failed to set " << param << ", status=" << _r; \
+    } \
+} while(0)
+#define HIK_SET_ENUM_STR(camera_handle,param, val_str) do { \
+    int _r = MV_CC_SetEnumValueByString(camera_handle, param, (val_str).c_str()); \
+    if (_r == MV_OK) { \
+        WUST_INFO("hik_camera") << param << " set to " << (val_str); \
+    } else { \
+        WUST_ERROR("hik_camera") << "Failed to set " << param << ", status=" << _r; \
+    } \
+} while(0)
+template<typename T>
+inline void HikSetRangeDispatch(void* camera_handle, const char* param, const T& val) {
+    if constexpr (std::is_integral_v<T> && !std::is_same_v<T, bool>) {
+        HIK_SET_INT_RANGE(camera_handle, param, val);
+    } else if constexpr (std::is_floating_point_v<T>) {
+        HIK_SET_FLOAT_RANGE(camera_handle, param, val);
+    } else if constexpr (std::is_same_v<T, bool>) {
+        HIK_SET_BOOL(camera_handle, param, val);
+    } else if constexpr (std::is_same_v<T, std::string>) {
+        HIK_SET_ENUM_STR(camera_handle, param, val);
+    } else {
+        static_assert(sizeof(T) == 0, "Unsupported HikCamera param type");
+    }
+}
+#define HIK_GEN_MEMBER_GET_SET(type, camera_handle, param) \
+    type param##_val{}; \
+    inline void set##param(const type& v) { \
+        param##_val = v; \
+        HikSetRangeDispatch(camera_handle, #param, param##_val); \
+    } \
+    inline type get##param() const { return param##_val; }
+
+
+
 class HikCamera: public ICameraDevice {
 public:
     HikCamera();
@@ -31,18 +127,26 @@ public:
     }
 
     bool initializeCamera(const std::string& target_sn);
-    void setExposureTime(double exposure_time);
-    double getExposureTime() const {
-        return last_exposure_time_;
-    }
     void start() override;
     bool restart();
     void stop() override;
-    bool enableTrigger(TriggerType type, const std::string& source, int64_t activation);
+    bool setTrigger(TriggerType type, const std::string& source, int64_t activation);
     void disableTrigger();
     bool read() override;
     ImageFrame readImage() override;
-
+    HIK_GEN_MEMBER_GET_SET(std::string, camera_handle_, PixelFormat)
+    HIK_GEN_MEMBER_GET_SET(std::string, camera_handle_, ADCBitDepth)
+    HIK_GEN_MEMBER_GET_SET(bool, camera_handle_, ReverseX)
+    HIK_GEN_MEMBER_GET_SET(bool, camera_handle_, ReverseY)
+    HIK_GEN_MEMBER_GET_SET(int, camera_handle_, Width)
+    HIK_GEN_MEMBER_GET_SET(int, camera_handle_, Height)
+    HIK_GEN_MEMBER_GET_SET(int, camera_handle_, OffsetX)
+    HIK_GEN_MEMBER_GET_SET(int, camera_handle_, OffsetY)
+    HIK_GEN_MEMBER_GET_SET(bool, camera_handle_, AcquisitionFrameRateEnable)
+    HIK_GEN_MEMBER_GET_SET(double, camera_handle_, AcquisitionFrameRate)
+    HIK_GEN_MEMBER_GET_SET(double, camera_handle_, Gain)
+    HIK_GEN_MEMBER_GET_SET(double, camera_handle_, Gamma)
+    HIK_GEN_MEMBER_GET_SET(double, camera_handle_, ExposureTime)
 private:
     void hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThread> self);
     YAML::Node config_;
@@ -55,12 +159,9 @@ private:
     MV_CC_PIXEL_CONVERT_PARAM convert_param_;
     std::shared_ptr<wust_vl_concurrency::MonitoredThread> capture_thread_;
     std::string hik_logger_ = "hik_camera";
-    double last_frame_rate_, last_exposure_time_, last_gain_, last_gamma_;
-    bool last_acquisition_frame_rate_enable_;
-    std::string last_adc_bit_depth_, last_pixel_format_;
-    std::string last_target_sn_;
+    
+    std::string target_sn_;
     bool in_low_frame_rate_state_;
-    bool last_reverse_x_, last_reverse_y_;
     TriggerType trigger_type_ = TriggerType::None;
     std::string trigger_source_; // e.g. "Line0"、"Software"
     int64_t trigger_activation_; // 0=FallingEdge, 1=RisingEdge

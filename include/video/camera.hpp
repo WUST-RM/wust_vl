@@ -49,7 +49,7 @@ public:
                 device_->loadConfig(config["video_player"]);
                 break;
         }
-        WUST_INFO("camera")<<"init camera success";
+        WUST_INFO("camera") << "init camera success";
         return true;
     }
     void read() {
