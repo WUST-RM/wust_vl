@@ -89,7 +89,7 @@ bool HikCamera::loadConfig(const YAML::Node& config) {
     setAcquisitionFrameRateEnable(acquisition_frame_rate_enable);
     auto width = config["width"].as<int>();
     setWidth(width);
-    auto height= config["height"].as<int>();
+    auto height = config["height"].as<int>();
     setHeight(height);
     auto offset_x = config["offset_x"].as<int>();
     setOffsetX(offset_x);
@@ -184,20 +184,6 @@ bool HikCamera::initializeCamera(const std::string& target_sn) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             continue;
         }
-
-        n_ret = MV_CC_GetImageInfo(camera_handle_, &img_info_);
-        if (n_ret != MV_OK) {
-            WUST_ERROR(hik_logger_) << "MV_CC_GetImageInfo failed: " << n_ret;
-            MV_CC_CloseDevice(camera_handle_);
-            MV_CC_DestroyHandle(camera_handle_);
-            camera_handle_ = nullptr;
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            continue;
-        }
-
-        convert_param_.nWidth = img_info_.nWidthValue;
-        convert_param_.nHeight = img_info_.nHeightValue;
-        convert_param_.enDstPixelType = PixelType_Gvsp_RGB8_Packed;
 
         disableTrigger();
 
@@ -355,7 +341,7 @@ void HikCamera::hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThr
                     frame_counter = 0;
                     last_frame_rate_check = current_time;
 
-                    if (actual_fps < getAcquisitionFrameRate()* 0.5f) {
+                    if (actual_fps < getAcquisitionFrameRate() * 0.5f) {
                         if (!in_low_frame_rate_state_) {
                             low_frame_rate_start_time_ = current_time;
                             in_low_frame_rate_state_ = true;
