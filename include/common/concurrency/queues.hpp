@@ -7,15 +7,15 @@
 #include <map>
 #include <mutex>
 #include <vector>
-
 template<typename T>
+concept HasFrameIDAndTimestamp =
+    requires(T a) {
+        { a.id } -> std::same_as<int>;
+        { a.timestamp } -> std::same_as<std::chrono::steady_clock::time_point>;
+    };
+template<HasFrameIDAndTimestamp T>
 class OrderedQueue {
 public:
-    static_assert(
-        std::is_same<decltype(T::id), int>::value
-            && std::is_same<decltype(T::timestamp), std::chrono::steady_clock::time_point>::value,
-        "T must have int id and timestamp of type std::chrono::steady_clock::time_point"
-    );
 
     OrderedQueue(int max_wait_ms = 50, int max_lag_ms = 200)
         : current_id_(0), max_wait_ms_(max_wait_ms), max_lag_ms_(max_lag_ms) {}
