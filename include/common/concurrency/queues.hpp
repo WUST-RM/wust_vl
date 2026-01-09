@@ -10,9 +10,10 @@
 template<typename T>
 concept HasFrameIDAndTimestamp =
     requires(T a) {
-        { a.id } -> std::same_as<int>;
-        { a.timestamp } -> std::same_as<std::chrono::steady_clock::time_point>;
+        { a.id } -> std::convertible_to<int>;
+        { a.timestamp } -> std::convertible_to<std::chrono::steady_clock::time_point>;
     };
+
 template<HasFrameIDAndTimestamp T>
 class OrderedQueue {
 public:
