@@ -17,82 +17,94 @@ public:
         "T must have int id and timestamp of type std::chrono::steady_clock::time_point"
     );
 
-    OrderedQueue(int max_wait_ms = 50, int max_lag_ms = 200):
-        current_id_(0),
-        max_wait_ms_(max_wait_ms),
-        max_lag_ms_(max_lag_ms) {}
+    OrderedQueue(int max_wait_ms = 50, int max_lag_ms = 200)
+        : current_id_(0), max_wait_ms_(max_wait_ms), max_lag_ms_(max_lag_ms) {}
 
     // 入队
     void enqueue(const T& item) {
-        std::lock_guard<std::mutex> lock(mutex_);
         auto now = std::chrono::steady_clock::now();
-
-        // 丢弃过期或滞后太久的帧
-        if (item.id < current_id_
-            || std::chrono::duration_cast<std::chrono::milliseconds>(now - item.timestamp).count()
-                > max_lag_ms_)
         {
-            return;
+            std::lock_guard<std::mutex> lk(mutex_);
+
+            // 丢弃旧帧或滞后过久的帧
+            if (item.id < current_id_) return;
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(now - item.timestamp).count() > max_lag_ms_) {
+                return;
+            }
+
+            Entry entry{item, now};
+            buffer_[item.id] = std::move(entry);
         }
-
-        Entry entry { item, now };
-
-        if (item.id < current_id_) {
-            old_buffer_[item.id] = entry;
-        } else {
-            buffer_[item.id] = entry;
-        }
-
-        cond_var_.notify_one();
+        cond_var_.notify_all(); // 唤醒等待线程
     }
 
     // 非阻塞尝试出队
     bool try_dequeue(T& out_item) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::mutex> lk(mutex_);
         auto now = std::chrono::steady_clock::now();
 
-        // 清理 old_buffer 中滞后过久的帧
-        while (!old_buffer_.empty()) {
-            auto it_old = old_buffer_.begin();
-            auto age_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                              now - it_old->second.enqueue_time
-            )
-                              .count();
-            if (age_ms > max_lag_ms_) {
-                old_buffer_.erase(it_old);
-            } else {
-                out_item = it_old->second.frame;
-                old_buffer_.erase(it_old);
-                return true;
-            }
-        }
-
-        if (buffer_.empty())
-            return false;
-
+        if (buffer_.empty()) return false;
         auto it = buffer_.begin();
 
-        // 如果缺失 ID 超时，则跳帧
+        // 缺帧等待超时跳帧逻辑
         if (it->first > current_id_ + 1) {
-            auto wait_duration =
-                std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second.enqueue_time)
-                    .count();
-            if (wait_duration >= max_wait_ms_) {
+            auto wait_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second.enqueue_time).count();
+            if (wait_ms >= max_wait_ms_) {
                 current_id_ = it->first;
             } else {
-                return false; // 等待缺失帧
+                return false;
             }
         }
 
-        out_item = it->second.frame;
+        out_item = std::move(it->second.frame);
         current_id_ = it->first;
         buffer_.erase(it);
         return true;
     }
 
-    size_t size() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return buffer_.size() + old_buffer_.size();
+    // 阻塞式出队（新增）
+    bool dequeue_wait(T& out_item, bool& timeout_skip) {
+        timeout_skip = false;
+        std::unique_lock<std::mutex> lk(mutex_);
+
+        while (alive_) {
+            cond_var_.wait(lk, [&]{ return !buffer_.empty() || !alive_; });
+            if (!alive_) break;
+            if (buffer_.empty()) continue;
+
+            auto now = std::chrono::steady_clock::now();
+            auto it = buffer_.begin();
+
+            // 超时跳帧处理
+            if (it->first > current_id_ + 1) {
+                auto age_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second.enqueue_time).count();
+                if (age_ms < max_wait_ms_) {
+                    continue; // 继续等缺失帧
+                }
+                timeout_skip = true;
+                current_id_ = it->first;
+            }
+
+            // 正常出队
+            out_item = std::move(it->second.frame);
+            current_id_ = it->first;
+            buffer_.erase(it);
+            return true;
+        }
+
+        return false;
+    }
+
+    void stop() {
+        alive_ = false;
+        cond_var_.notify_all();
+    }
+
+    bool is_alive() const noexcept { return alive_; }
+
+    size_t size() const {
+        std::lock_guard<std::mutex> lk(mutex_);
+        return buffer_.size();
     }
 
 private:
@@ -101,13 +113,13 @@ private:
         std::chrono::steady_clock::time_point enqueue_time;
     };
 
-    std::map<int, Entry> buffer_; // 按 ID 排序的主缓冲
-    std::map<int, Entry> old_buffer_; // 小于 current_id_ 的旧缓冲
+    std::map<int, Entry> buffer_;
     int current_id_;
-    int max_wait_ms_; // 缺帧等待时间
-    int max_lag_ms_; // 帧滞后丢弃阈值（ms）
-    std::mutex mutex_;
+    int max_wait_ms_;
+    int max_lag_ms_;
+    mutable std::mutex mutex_;
     std::condition_variable cond_var_;
+    std::atomic<bool> alive_{true};
 };
 
 template<typename T>
@@ -127,51 +139,61 @@ public:
 
     explicit TimedQueue(double valid_duration): valid_duration_(valid_duration) {}
 
-    // 添加新目标（自动清理）
+    // 添加新目标（自动清理 + 唤醒消费线程）
     void push(
         const T& obj,
         std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now()
     ) {
-        std::lock_guard<std::mutex> lk(mtx_);
-        clear_stale_locked();
-        queue_.push_back({ obj, timestamp });
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            clear_stale_locked();
+            queue_.push_back({ obj, timestamp });
+        }
+        cv_.notify_one();
     }
     void push(
         T&& obj,
         std::chrono::steady_clock::time_point timestamp = std::chrono::steady_clock::now()
     ) {
-        std::lock_guard<std::mutex> lk(mtx_);
-        clear_stale_locked();
-        queue_.push_back({ std::move(obj), timestamp });
-    }
-
-    // 出队有效目标（自动清理）
-    bool pop_valid(T& out) {
-        auto now = std::chrono::steady_clock::now();
-        std::lock_guard<std::mutex> lk(mtx_);
-        clear_stale_locked();
-
-        for (auto it = queue_.begin(); it != queue_.end(); ++it) {
-            out = std::move(it->data);
-            queue_.erase(it);
-            return true;
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            clear_stale_locked();
+            queue_.push_back({ std::move(obj), timestamp });
         }
-        return false;
+        cv_.notify_one();
     }
 
-    // 获取当前所有有效目标（自动清理）
-    std::vector<T> get_valid_targets() {
-        auto now = std::chrono::steady_clock::now();
-        std::vector<T> result;
-
+    // 非阻塞 pop（你原来的逻辑）
+    bool pop_valid(T& out) {
         std::lock_guard<std::mutex> lk(mtx_);
         clear_stale_locked();
+        if (queue_.empty()) return false;
+        out = std::move(queue_.front().data);
+        queue_.erase(queue_.begin());
+        return true;
+    }
 
-        for (auto& item: queue_)
-            result.push_back(item.data);
+    // 阻塞式 pop，直到有数据或队列被 stop
+    bool pop_wait(T& out) {
+        std::unique_lock<std::mutex> lk(mtx_);
+        cv_.wait(lk, [&]{ return !queue_.empty() || !alive_; });
 
-        last_query_ = now;
-        return result;
+        clear_stale_locked();
+        if (!alive_ || queue_.empty()) return false;
+
+        out = std::move(queue_.front().data);
+        queue_.erase(queue_.begin());
+        return true;
+    }
+
+    // 停止队列，唤醒所有等待线程
+    void stop() {
+        alive_ = false;
+        cv_.notify_all();
+    }
+
+    bool is_alive() const noexcept {
+        return alive_;
     }
 
 private:
@@ -186,7 +208,8 @@ private:
 
     std::vector<QueueItem> queue_;
     std::mutex mtx_;
-    std::chrono::steady_clock::time_point last_query_ = std::chrono::steady_clock::now();
+    std::condition_variable cv_;
+    std::atomic<bool> alive_{true};
     double valid_duration_;
 };
 

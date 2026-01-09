@@ -46,20 +46,7 @@ HikCamera::HikCamera(): camera_handle_(nullptr), fail_count_(0) {}
 HikCamera::~HikCamera() {
     stop();
 
-    if (capture_thread_) {
-        capture_thread_->stop();
-        wust_vl_concurrency::ThreadManager::instance().unregisterThread(capture_thread_->getName());
-    }
-    if (process_thread_) {
-        process_thread_->stop();
-        wust_vl_concurrency::ThreadManager::instance().unregisterThread(process_thread_->getName());
-    }
-    if (camera_handle_) {
-        MV_CC_StopGrabbing(camera_handle_);
-        MV_CC_CloseDevice(camera_handle_);
-        MV_CC_DestroyHandle(&camera_handle_);
-    }
-
+    
     WUST_INFO(hik_logger_) << "Camera destroyed!";
 }
 bool HikCamera::loadConfig(const YAML::Node& config) {
@@ -276,13 +263,12 @@ void HikCamera::hikProcessLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThr
     while (self->isAlive()) {
         ImageFrame frame;
         self->heartbeat();
-        if (img_queue_.pop_valid(frame)) {
+        if (img_queue_.pop_wait(frame)) {
             if (on_frame_callback_) {
                 frame.src_img = convertToMat(frame, use_raw_);
                 on_frame_callback_(frame);
             }
         } else {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
 }
@@ -401,6 +387,21 @@ void HikCamera::hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThr
 
 void HikCamera::stop() {
     stop_signal_ = true;
+    img_queue_.stop();
+    if (capture_thread_) {
+        capture_thread_->stop();
+        wust_vl_concurrency::ThreadManager::instance().unregisterThread(capture_thread_->getName());
+    }
+    if (process_thread_) {
+        process_thread_->stop();
+        wust_vl_concurrency::ThreadManager::instance().unregisterThread(process_thread_->getName());
+    }
+    if (camera_handle_) {
+        MV_CC_StopGrabbing(camera_handle_);
+        MV_CC_CloseDevice(camera_handle_);
+        MV_CC_DestroyHandle(&camera_handle_);
+    }
+
 }
 bool HikCamera::read() {
     if (trigger_type_ == TriggerType::None) {
