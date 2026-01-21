@@ -45,8 +45,6 @@ HikCamera::HikCamera(): camera_handle_(nullptr), fail_count_(0) {}
 
 HikCamera::~HikCamera() {
     stop();
-
-    
     WUST_INFO(hik_logger_) << "Camera destroyed!";
 }
 bool HikCamera::loadConfig(const YAML::Node& config) {
@@ -265,7 +263,7 @@ void HikCamera::hikProcessLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThr
         self->heartbeat();
         if (img_queue_.pop_wait(frame)) {
             if (on_frame_callback_) {
-                frame.src_img = convertToMat(frame, use_raw_);
+                frame.src_img = std::move(convertToMat(frame, use_raw_));
                 on_frame_callback_(frame);
             }
         } else {
@@ -401,7 +399,6 @@ void HikCamera::stop() {
         MV_CC_CloseDevice(camera_handle_);
         MV_CC_DestroyHandle(&camera_handle_);
     }
-
 }
 bool HikCamera::read() {
     if (trigger_type_ == TriggerType::None) {

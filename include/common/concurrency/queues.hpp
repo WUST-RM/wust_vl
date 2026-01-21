@@ -8,18 +8,22 @@
 #include <mutex>
 #include <vector>
 template<typename T>
-concept HasFrameIDAndTimestamp =
-    requires(T a) {
-        { a.id } -> std::convertible_to<int>;
-        { a.timestamp } -> std::convertible_to<std::chrono::steady_clock::time_point>;
-    };
+concept HasFrameIDAndTimestamp = requires(T a) {
+    {
+        a.id
+        } -> std::convertible_to<int>;
+    {
+        a.timestamp
+        } -> std::convertible_to<std::chrono::steady_clock::time_point>;
+};
 
 template<HasFrameIDAndTimestamp T>
 class OrderedQueue {
 public:
-
-    OrderedQueue(int max_wait_ms = 50, int max_lag_ms = 200)
-        : current_id_(0), max_wait_ms_(max_wait_ms), max_lag_ms_(max_lag_ms) {}
+    OrderedQueue(int max_wait_ms = 50, int max_lag_ms = 200):
+        current_id_(0),
+        max_wait_ms_(max_wait_ms),
+        max_lag_ms_(max_lag_ms) {}
 
     // 入队
     void enqueue(const T& item) {
@@ -28,12 +32,15 @@ public:
             std::lock_guard<std::mutex> lk(mutex_);
 
             // 丢弃旧帧或滞后过久的帧
-            if (item.id < current_id_) return;
-            if (std::chrono::duration_cast<std::chrono::milliseconds>(now - item.timestamp).count() > max_lag_ms_) {
+            if (item.id < current_id_)
+                return;
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(now - item.timestamp).count()
+                > max_lag_ms_)
+            {
                 return;
             }
 
-            Entry entry{item, now};
+            Entry entry { item, now };
             buffer_[item.id] = std::move(entry);
         }
         cond_var_.notify_all(); // 唤醒等待线程
@@ -44,12 +51,15 @@ public:
         std::lock_guard<std::mutex> lk(mutex_);
         auto now = std::chrono::steady_clock::now();
 
-        if (buffer_.empty()) return false;
+        if (buffer_.empty())
+            return false;
         auto it = buffer_.begin();
 
         // 缺帧等待超时跳帧逻辑
         if (it->first > current_id_ + 1) {
-            auto wait_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second.enqueue_time).count();
+            auto wait_ms =
+                std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second.enqueue_time)
+                    .count();
             if (wait_ms >= max_wait_ms_) {
                 current_id_ = it->first;
             } else {
@@ -69,16 +79,21 @@ public:
         std::unique_lock<std::mutex> lk(mutex_);
 
         while (alive_) {
-            cond_var_.wait(lk, [&]{ return !buffer_.empty() || !alive_; });
-            if (!alive_) break;
-            if (buffer_.empty()) continue;
+            cond_var_.wait(lk, [&] { return !buffer_.empty() || !alive_; });
+            if (!alive_)
+                break;
+            if (buffer_.empty())
+                continue;
 
             auto now = std::chrono::steady_clock::now();
             auto it = buffer_.begin();
 
             // 超时跳帧处理
             if (it->first > current_id_ + 1) {
-                auto age_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second.enqueue_time).count();
+                auto age_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                  now - it->second.enqueue_time
+                )
+                                  .count();
                 if (age_ms < max_wait_ms_) {
                     continue; // 继续等缺失帧
                 }
@@ -101,7 +116,9 @@ public:
         cond_var_.notify_all();
     }
 
-    bool is_alive() const noexcept { return alive_; }
+    bool is_alive() const noexcept {
+        return alive_;
+    }
 
     size_t size() const {
         std::lock_guard<std::mutex> lk(mutex_);
@@ -120,7 +137,7 @@ private:
     int max_lag_ms_;
     mutable std::mutex mutex_;
     std::condition_variable cond_var_;
-    std::atomic<bool> alive_{true};
+    std::atomic<bool> alive_ { true };
 };
 
 template<typename T>
@@ -168,7 +185,8 @@ public:
     bool pop_valid(T& out) {
         std::lock_guard<std::mutex> lk(mtx_);
         clear_stale_locked();
-        if (queue_.empty()) return false;
+        if (queue_.empty())
+            return false;
         out = std::move(queue_.front().data);
         queue_.erase(queue_.begin());
         return true;
@@ -177,10 +195,11 @@ public:
     // 阻塞式 pop，直到有数据或队列被 stop
     bool pop_wait(T& out) {
         std::unique_lock<std::mutex> lk(mtx_);
-        cv_.wait(lk, [&]{ return !queue_.empty() || !alive_; });
+        cv_.wait(lk, [&] { return !queue_.empty() || !alive_; });
 
         clear_stale_locked();
-        if (!alive_ || queue_.empty()) return false;
+        if (!alive_ || queue_.empty())
+            return false;
 
         out = std::move(queue_.front().data);
         queue_.erase(queue_.begin());
@@ -210,7 +229,7 @@ private:
     std::vector<QueueItem> queue_;
     std::mutex mtx_;
     std::condition_variable cv_;
-    std::atomic<bool> alive_{true};
+    std::atomic<bool> alive_ { true };
     double valid_duration_;
 };
 

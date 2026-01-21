@@ -22,14 +22,12 @@ class TrajectoryCompensator {
 public:
     TrajectoryCompensator() = default;
     virtual ~TrajectoryCompensator() = default;
-    void load(const YAML::Node& cfg)
-    {
+    void load(const YAML::Node& cfg) {
         iteration_times_ = cfg["iteration_times"].as<int>(iteration_times_);
         gravity_ = cfg["gravity"].as<double>(gravity_);
         resistance_ = cfg["resistance"].as<double>(resistance_);
         k1_ = cfg["k1"].as<double>(k1_);
     }
-
 
     // Compensate the trajectory of the bullet, return the pitch increment
     bool
