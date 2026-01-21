@@ -258,7 +258,7 @@ bool HikCamera::restart() {
     return true;
 }
 void HikCamera::hikProcessLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThread> self) {
-    while (self->isAlive()) {
+    while (self->isAlive() && !stop_signal_) {
         ImageFrame frame;
         self->heartbeat();
         if (img_queue_.pop_wait(frame)) {
@@ -268,6 +268,14 @@ void HikCamera::hikProcessLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThr
             }
         } else {
         }
+        // if (img_queue_.pop_valid(frame)) {
+        //     if (on_frame_callback_) {
+        //         frame.src_img = std::move(convertToMat(frame, use_raw_));
+        //         on_frame_callback_(frame);
+        //     }
+        // } else {
+        //     std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        // }
     }
 }
 void HikCamera::hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThread> self) {
@@ -282,7 +290,7 @@ void HikCamera::hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThr
     int frame_counter = 0;
 
     try {
-        while (self->isAlive()) {
+        while (self->isAlive() && !stop_signal_) {
             self->heartbeat();
             auto start_time = std::chrono::steady_clock::now();
             int n_ret = MV_CC_GetImageBuffer(camera_handle_, &out_frame, 100);
@@ -293,26 +301,33 @@ void HikCamera::hikCaptureLoop(std::shared_ptr<wust_vl_concurrency::MonitoredThr
                 ImageFrame frame;
                 auto current_time = std::chrono::steady_clock::now();
 
-                auto half_exposure = std::chrono::microseconds((long)(getExposureTime() / 2));
-                frame.timestamp = current_time - half_exposure;
-                frame.width = out_frame.stFrameInfo.nWidth;
-                frame.height = out_frame.stFrameInfo.nHeight;
-                frame.data.resize(out_frame.stFrameInfo.nFrameLen);
-                std::memcpy(frame.data.data(), out_frame.pBufAddr, out_frame.stFrameInfo.nFrameLen);
-                const auto& frame_info = out_frame.stFrameInfo;
-                auto pixel_type = frame_info.enPixelType;
+                auto half_exposure =
+                    std::chrono::microseconds(static_cast<long>(getExposureTime() / 2));
 
+                frame.timestamp = current_time - half_exposure;
+
+                const auto& info = out_frame.stFrameInfo;
+
+                frame.width = info.nWidth;
+                frame.height = info.nHeight;
+
+                frame.data.resize(info.nFrameLen);
+                std::memcpy(frame.data.data(), out_frame.pBufAddr, info.nFrameLen);
+
+                auto pixel_type = info.enPixelType;
                 frame.img_type = img_type_map.at(pixel_type);
-                if (frame.img_type == CV_8UC3) {
-                    frame.step = frame.width * 3;
-                } else if (frame.img_type == CV_8UC1) {
-                    frame.step = frame.width;
-                }
+
+                frame.step = info.nFrameLen / frame.height;
+
+                CV_Assert(frame.step > 0);
+                CV_Assert(frame.step * frame.height <= frame.data.size());
+
                 const auto& map_ref = use_rgb_ ? (use_ea_ ? PIXEL_MAP_RGB_EA : PIXEL_MAP_RGB)
                                                : (use_ea_ ? PIXEL_MAP_BGR_EA : PIXEL_MAP_BGR);
-                frame.pixel_type = map_ref.at(pixel_type);
-                img_queue_.push(std::move(frame));
 
+                frame.pixel_type = map_ref.at(pixel_type);
+
+                img_queue_.push(std::move(frame));
                 MV_CC_FreeImageBuffer(camera_handle_, &out_frame);
 
                 if (std::chrono::duration_cast<std::chrono::seconds>(
@@ -418,24 +433,32 @@ bool HikCamera::read() {
     }
 
     ImageFrame frame;
-    frame.width = out_frame.stFrameInfo.nWidth;
-    frame.height = out_frame.stFrameInfo.nHeight;
-    frame.data.resize(out_frame.stFrameInfo.nFrameLen);
-    std::memcpy(frame.data.data(), out_frame.pBufAddr, out_frame.stFrameInfo.nFrameLen);
-    const auto& frame_info = out_frame.stFrameInfo;
-    auto pixel_type = frame_info.enPixelType;
+    auto current_time = std::chrono::steady_clock::now();
 
+    auto half_exposure = std::chrono::microseconds(static_cast<long>(getExposureTime() / 2));
+
+    frame.timestamp = current_time - half_exposure;
+
+    const auto& info = out_frame.stFrameInfo;
+
+    frame.width = info.nWidth;
+    frame.height = info.nHeight;
+
+    frame.data.resize(info.nFrameLen);
+    std::memcpy(frame.data.data(), out_frame.pBufAddr, info.nFrameLen);
+
+    auto pixel_type = info.enPixelType;
     frame.img_type = img_type_map.at(pixel_type);
-    if (frame.img_type == CV_8UC3) {
-        frame.step = frame.width * 3;
-    } else if (frame.img_type == CV_8UC1) {
-        frame.step = frame.width;
-    }
+
+    frame.step = info.nFrameLen / frame.height;
+
+    CV_Assert(frame.step > 0);
+    CV_Assert(frame.step * frame.height <= frame.data.size());
+
     const auto& map_ref = use_rgb_ ? (use_ea_ ? PIXEL_MAP_RGB_EA : PIXEL_MAP_RGB)
                                    : (use_ea_ ? PIXEL_MAP_BGR_EA : PIXEL_MAP_BGR);
+
     frame.pixel_type = map_ref.at(pixel_type);
-    auto half_exposure = std::chrono::microseconds((long)(getExposureTime() / 2));
-    frame.timestamp = std::chrono::steady_clock::now() - half_exposure;
 
     if (on_frame_callback_) {
         on_frame_callback_(frame);
@@ -463,23 +486,32 @@ ImageFrame HikCamera::readImage() {
     }
 
     ImageFrame frame;
-    frame.width = out_frame.stFrameInfo.nWidth;
-    frame.height = out_frame.stFrameInfo.nHeight;
-    frame.data.resize(out_frame.stFrameInfo.nFrameLen);
-    std::memcpy(frame.data.data(), out_frame.pBufAddr, out_frame.stFrameInfo.nFrameLen);
-    const auto& frame_info = out_frame.stFrameInfo;
-    auto pixel_type = frame_info.enPixelType;
+    auto current_time = std::chrono::steady_clock::now();
+
+    auto half_exposure = std::chrono::microseconds(static_cast<long>(getExposureTime() / 2));
+
+    frame.timestamp = current_time - half_exposure;
+
+    const auto& info = out_frame.stFrameInfo;
+
+    frame.width = info.nWidth;
+    frame.height = info.nHeight;
+
+    frame.data.resize(info.nFrameLen);
+    std::memcpy(frame.data.data(), out_frame.pBufAddr, info.nFrameLen);
+
+    auto pixel_type = info.enPixelType;
     frame.img_type = img_type_map.at(pixel_type);
-    if (frame.img_type == CV_8UC3) {
-        frame.step = frame.width * 3;
-    } else if (frame.img_type == CV_8UC1) {
-        frame.step = frame.width;
-    }
+
+    frame.step = info.nFrameLen / frame.height;
+
+    CV_Assert(frame.step > 0);
+    CV_Assert(frame.step * frame.height <= frame.data.size());
+
     const auto& map_ref = use_rgb_ ? (use_ea_ ? PIXEL_MAP_RGB_EA : PIXEL_MAP_RGB)
                                    : (use_ea_ ? PIXEL_MAP_BGR_EA : PIXEL_MAP_BGR);
+
     frame.pixel_type = map_ref.at(pixel_type);
-    auto half_exposure = std::chrono::microseconds((long)(getExposureTime() / 2));
-    frame.timestamp = std::chrono::steady_clock::now() - half_exposure;
 
     MV_CC_FreeImageBuffer(camera_handle_, &out_frame);
     return frame;
