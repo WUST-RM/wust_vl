@@ -14,28 +14,29 @@
 #pragma once
 #include <onnxruntime_cxx_api.h>
 namespace wust_vl {
-enum class OrtProvider : uint8_t {
-    CPU, //!< 由 `CPU` 执行
-    CUDA, //!< 由 `CUDA` 执行
-    TensorRT, //!< 由 `TensorRT` 执行
-    OpenVINO //!< 由 `OpenVINO` 执行
-};
-inline OrtProvider string2OrtProvider(const std::string& str) {
-    std::string s = str;
-    std::transform(s.begin(), s.end(), s.begin(), ::tolower);
 
-    if (s == "cpu")
-        return OrtProvider::CPU;
-    if (s == "cuda")
-        return OrtProvider::CUDA;
-    if (s == "tensorrt")
-        return OrtProvider::TensorRT;
-    if (s == "openvino")
-        return OrtProvider::OpenVINO;
-
-    throw std::invalid_argument("Invalid OrtProvider string: " + str);
-}
 namespace ml_net {
+    enum class OrtProvider : uint8_t {
+        CPU, //!< 由 `CPU` 执行
+        CUDA, //!< 由 `CUDA` 执行
+        TensorRT, //!< 由 `TensorRT` 执行
+        OpenVINO //!< 由 `OpenVINO` 执行
+    };
+    inline OrtProvider string2OrtProvider(const std::string& str) {
+        std::string s = str;
+        std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+
+        if (s == "cpu")
+            return OrtProvider::CPU;
+        if (s == "cuda")
+            return OrtProvider::CUDA;
+        if (s == "tensorrt")
+            return OrtProvider::TensorRT;
+        if (s == "openvino")
+            return OrtProvider::OpenVINO;
+
+        throw std::invalid_argument("Invalid OrtProvider string: " + str);
+    }
     class OnnxRuntimeNet {
     public:
         struct Params {
