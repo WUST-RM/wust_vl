@@ -15,26 +15,28 @@
 #pragma once
 #include "ncnn/net.h"
 #include <memory>
+namespace wust_vl {
 namespace ml_net {
-class NCNNNet {
-public:
-    struct Params {
-        std::string model_path_param;
-        std::string model_path_bin;
-        std::string input_name;
-        std::string output_name;
-        bool use_vulkan;
-        int device_id;
-        bool use_light_mode;
-        int cpu_threads;
-    };
-    NCNNNet();
-    ~NCNNNet();
-    void init(const Params& params);
-    ncnn::Mat infer(const ncnn::Mat& input_tensor);
+    class NCNNNet {
+    public:
+        struct Params {
+            std::string model_path_param;
+            std::string model_path_bin;
+            std::string input_name;
+            std::string output_name;
+            bool use_vulkan;
+            int device_id;
+            bool use_light_mode;
+            int cpu_threads;
+        };
+        NCNNNet();
+        ~NCNNNet();
+        void init(const Params& params);
+        ncnn::Mat infer(const ncnn::Mat& input_tensor);
 
-private:
-    struct Impl;
-    std::unique_ptr<Impl> _impl;
-};
+    private:
+        struct Impl;
+        std::unique_ptr<Impl> _impl;
+    };
 } // namespace ml_net
+} // namespace wust_vl

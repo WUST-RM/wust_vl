@@ -17,40 +17,41 @@
 #include <iostream>
 #include <memory>
 #include <string>
-
+namespace wust_vl {
 namespace ml_net {
-class TRTLogger: public nvinfer1::ILogger {
-public:
-    explicit TRTLogger(
-        nvinfer1::ILogger::Severity severity = nvinfer1::ILogger::Severity::kWARNING
-    ):
-        severity_(severity) {}
-    void log(nvinfer1::ILogger::Severity severity, const char* msg) noexcept override {
-        if (severity <= severity_) {
-            std::cerr << msg << std::endl;
+    class TRTLogger: public nvinfer1::ILogger {
+    public:
+        explicit TRTLogger(
+            nvinfer1::ILogger::Severity severity = nvinfer1::ILogger::Severity::kWARNING
+        ):
+            severity_(severity) {}
+        void log(nvinfer1::ILogger::Severity severity, const char* msg) noexcept override {
+            if (severity <= severity_) {
+                std::cerr << msg << std::endl;
+            }
         }
-    }
-    nvinfer1::ILogger::Severity severity_;
-};
-class TensorRTNet {
-public:
-    struct Params {
-        std::string model_path;
-        nvinfer1::Dims input_dims;
+        nvinfer1::ILogger::Severity severity_;
     };
-    TensorRTNet();
-    ~TensorRTNet();
-    bool init(const Params& params);
-    nvinfer1::IExecutionContext* getAContext();
-    cudaStream_t getStream();
-    void input2Device(void* input_data);
-    float* output2Host();
-    void* getDeviceOutput();
-    void* getInputTensorPtr();
-    void infer(void* input_data, nvinfer1::IExecutionContext* context);
-    std::tuple<nvinfer1::Dims, nvinfer1::Dims> getInputOutputDims();
-    Params params_;
-    struct Impl;
-    std::unique_ptr<Impl> _impl;
-};
+    class TensorRTNet {
+    public:
+        struct Params {
+            std::string model_path;
+            nvinfer1::Dims input_dims;
+        };
+        TensorRTNet();
+        ~TensorRTNet();
+        bool init(const Params& params);
+        nvinfer1::IExecutionContext* getAContext();
+        cudaStream_t getStream();
+        void input2Device(void* input_data);
+        float* output2Host();
+        void* getDeviceOutput();
+        void* getInputTensorPtr();
+        void infer(void* input_data, nvinfer1::IExecutionContext* context);
+        std::tuple<nvinfer1::Dims, nvinfer1::Dims> getInputOutputDims();
+        Params params_;
+        struct Impl;
+        std::unique_ptr<Impl> _impl;
+    };
 } // namespace ml_net
+} // namespace wust_vl

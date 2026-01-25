@@ -17,23 +17,28 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <vector>
+namespace wust_vl {
+namespace common {
+    namespace utils {
+        class Labeler {
+        public:
+            Labeler();
+            ~Labeler();
 
-class Labeler {
-public:
-    Labeler();
-    ~Labeler();
+            void save(const cv::Mat& image, const std::vector<float>& data_row);
 
-    void save(const cv::Mat& image, const std::vector<float>& data_row);
+        private:
+            std::string image_dir_;
+            std::string csv_dir_;
+            std::string temp_csv_path_;
 
-private:
-    std::string image_dir_;
-    std::string csv_dir_;
-    std::string temp_csv_path_;
+            std::ofstream csv_file_;
+            int image_index_ = 1;
+            int start_index_ = 1;
+            bool csv_header_written_ = false;
 
-    std::ofstream csv_file_;
-    int image_index_ = 1;
-    int start_index_ = 1;
-    bool csv_header_written_ = false;
-
-    int getLastImageIndex() const;
-};
+            int getLastImageIndex() const;
+        };
+    } // namespace utils
+} // namespace common
+} // namespace wust_vl

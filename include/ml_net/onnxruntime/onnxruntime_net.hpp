@@ -13,6 +13,7 @@
 // limitations under the License.
 #pragma once
 #include <onnxruntime_cxx_api.h>
+namespace wust_vl {
 enum class OrtProvider : uint8_t {
     CPU, //!< 由 `CPU` 执行
     CUDA, //!< 由 `CUDA` 执行
@@ -35,22 +36,23 @@ inline OrtProvider string2OrtProvider(const std::string& str) {
     throw std::invalid_argument("Invalid OrtProvider string: " + str);
 }
 namespace ml_net {
-class OnnxRuntimeNet {
-public:
-    struct Params {
-        std::string model_path;
-        OrtProvider provider;
+    class OnnxRuntimeNet {
+    public:
+        struct Params {
+            std::string model_path;
+            OrtProvider provider;
+        };
+        OnnxRuntimeNet();
+        ~OnnxRuntimeNet();
+
+        void init(const Params& params);
+        float* infer(float* input_data, size_t input_size);
+        std::vector<int64_t> getOutputShape();
+
+    private:
+        Params params_;
+        struct Impl;
+        std::unique_ptr<Impl> _impl;
     };
-    OnnxRuntimeNet();
-    ~OnnxRuntimeNet();
-
-    void init(const Params& params);
-    float* infer(float* input_data, size_t input_size);
-    std::vector<int64_t> getOutputShape();
-
-private:
-    Params params_;
-    struct Impl;
-    std::unique_ptr<Impl> _impl;
-};
 } // namespace ml_net
+} // namespace wust_vl

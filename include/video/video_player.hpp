@@ -19,31 +19,33 @@
 #include <string>
 #include <thread>
 #include <yaml-cpp/yaml.h>
-namespace wust_vl_video {
-class VideoPlayer: public ICameraDevice {
-public:
-    VideoPlayer();
-    bool loadConfig(const YAML::Node& config) override;
+namespace wust_vl {
+namespace video {
+    class VideoPlayer: public ICameraDevice {
+    public:
+        VideoPlayer();
+        bool loadConfig(const YAML::Node& config) override;
 
-    void setFrameCallback(FrameCallback cb) override;
-    void start() override;
-    void stop() override;
-    bool read() override;
-    ImageFrame readImage() override;
-    ~VideoPlayer();
+        void setFrameCallback(FrameCallback cb) override;
+        void start() override;
+        void stop() override;
+        bool read() override;
+        ImageFrame readImage() override;
+        ~VideoPlayer();
 
-private:
-    void run(); // 后台线程函数
+    private:
+        void run(); // 后台线程函数
 
-    std::string path_;
-    int frame_rate_;
-    int start_frame_;
-    bool loop_;
-    std::atomic<bool> running_;
-    cv::VideoCapture cap_;
-    std::thread worker_;
-    bool trigger_mode_ = false;
-    FrameCallback on_frame_callback_;
-    bool use_cvt_ = false;
-};
-} // namespace wust_vl_video
+        std::string path_;
+        int frame_rate_;
+        int start_frame_;
+        bool loop_;
+        std::atomic<bool> running_;
+        cv::VideoCapture cap_;
+        std::thread worker_;
+        bool trigger_mode_ = false;
+        FrameCallback on_frame_callback_;
+        bool use_cvt_ = false;
+    };
+} // namespace video
+} // namespace wust_vl

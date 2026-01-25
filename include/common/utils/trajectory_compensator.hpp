@@ -16,88 +16,101 @@
 #pragma once
 #include <Eigen/Dense>
 #include <memory>
-#include <tuple>
 #include <yaml-cpp/yaml.h>
-class TrajectoryCompensator {
-public:
-    TrajectoryCompensator() = default;
-    virtual ~TrajectoryCompensator() = default;
-    void load(const YAML::Node& cfg) {
-        iteration_times_ = cfg["iteration_times"].as<int>(iteration_times_);
-        gravity_ = cfg["gravity"].as<double>(gravity_);
-        resistance_ = cfg["resistance"].as<double>(resistance_);
-        k1_ = cfg["k1"].as<double>(k1_);
-    }
+namespace wust_vl {
+namespace common {
+    namespace utils {
+        class TrajectoryCompensator {
+        public:
+            TrajectoryCompensator() = default;
+            virtual ~TrajectoryCompensator() = default;
+            void load(const YAML::Node& cfg) {
+                iteration_times_ = cfg["iteration_times"].as<int>(iteration_times_);
+                gravity_ = cfg["gravity"].as<double>(gravity_);
+                resistance_ = cfg["resistance"].as<double>(resistance_);
+                k1_ = cfg["k1"].as<double>(k1_);
+            }
 
-    // Compensate the trajectory of the bullet, return the pitch increment
-    bool
-    compensate(const Eigen::Vector3d& target_position, double& pitch, const double bullet_speed)
-        const noexcept;
+            // Compensate the trajectory of the bullet, return the pitch increment
+            bool compensate(
+                const Eigen::Vector3d& target_position,
+                double& pitch,
+                const double bullet_speed
+            ) const noexcept;
 
-    virtual double getFlyingTime(const Eigen::Vector3d& target_position, const double bullet_speed)
-        const noexcept = 0;
+            virtual double getFlyingTime(
+                const Eigen::Vector3d& target_position,
+                const double bullet_speed
+            ) const noexcept = 0;
 
-    std::vector<std::pair<double, double>>
-    getTrajectory(double distance, double angle, const double bullet_speed) const noexcept;
+            std::vector<std::pair<double, double>>
+            getTrajectory(double distance, double angle, const double bullet_speed) const noexcept;
 
-    int iteration_times_ = 20;
-    double gravity_ = 9.8;
-    double resistance_ = 0.01;
-    double k1_ = 0.0190; //大弹丸
+            int iteration_times_ = 20;
+            double gravity_ = 9.8;
+            double resistance_ = 0.01;
+            double k1_ = 0.0190; //大弹丸
 
-protected:
-    // Calculate the trajectory of the bullet, return the vertical impact point
-    virtual double
-    calculateTrajectory(const double x, const double angle, const double bullet_speed)
-        const noexcept = 0;
-};
+        protected:
+            // Calculate the trajectory of the bullet, return the vertical impact point
+            virtual double
+            calculateTrajectory(const double x, const double angle, const double bullet_speed)
+                const noexcept = 0;
+        };
 
-// IdealCompensator does not consider the air resistance
-class IdealCompensator: public TrajectoryCompensator {
-public:
-    double getFlyingTime(const Eigen::Vector3d& target_position, const double bullet_speed)
-        const noexcept override;
+        // IdealCompensator does not consider the air resistance
+        class IdealCompensator: public TrajectoryCompensator {
+        public:
+            double getFlyingTime(const Eigen::Vector3d& target_position, const double bullet_speed)
+                const noexcept override;
 
-protected:
-    double calculateTrajectory(const double x, const double angle, const double bullet_speed)
-        const noexcept override;
-};
+        protected:
+            double
+            calculateTrajectory(const double x, const double angle, const double bullet_speed)
+                const noexcept override;
+        };
 
-// ResistanceCompensator considers the air resistance
-class ResistanceCompensator: public TrajectoryCompensator {
-public:
-    double getFlyingTime(const Eigen::Vector3d& target_position, const double bullet_speed)
-        const noexcept override;
+        // ResistanceCompensator considers the air resistance
+        class ResistanceCompensator: public TrajectoryCompensator {
+        public:
+            double getFlyingTime(const Eigen::Vector3d& target_position, const double bullet_speed)
+                const noexcept override;
 
-protected:
-    double calculateTrajectory(const double x, const double angle, const double bullet_speed)
-        const noexcept override;
-};
-class K1Compensator: public TrajectoryCompensator {
-public:
-    double getFlyingTime(const Eigen::Vector3d& target_position, const double bullet_speed)
-        const noexcept override;
+        protected:
+            double
+            calculateTrajectory(const double x, const double angle, const double bullet_speed)
+                const noexcept override;
+        };
+        class K1Compensator: public TrajectoryCompensator {
+        public:
+            double getFlyingTime(const Eigen::Vector3d& target_position, const double bullet_speed)
+                const noexcept override;
 
-protected:
-    double calculateTrajectory(const double x, const double angle, const double bullet_speed)
-        const noexcept override;
-};
+        protected:
+            double
+            calculateTrajectory(const double x, const double angle, const double bullet_speed)
+                const noexcept override;
+        };
 
-// Factory class for trajectory compensator
-class CompensatorFactory: public TrajectoryCompensator {
-public:
-    static std::shared_ptr<TrajectoryCompensator> createCompensator(const std::string& type) {
-        if (type == "ideal") {
-            return std::make_shared<IdealCompensator>();
-        } else if (type == "resistance") {
-            return std::make_shared<ResistanceCompensator>();
-        } else if (type == "k1") {
-            return std::make_shared<K1Compensator>();
-        } else {
-            return nullptr;
-        }
-    }
+        // Factory class for trajectory compensator
+        class CompensatorFactory: public TrajectoryCompensator {
+        public:
+            static std::shared_ptr<TrajectoryCompensator> createCompensator(const std::string& type
+            ) {
+                if (type == "ideal") {
+                    return std::make_shared<IdealCompensator>();
+                } else if (type == "resistance") {
+                    return std::make_shared<ResistanceCompensator>();
+                } else if (type == "k1") {
+                    return std::make_shared<K1Compensator>();
+                } else {
+                    return nullptr;
+                }
+            }
 
-private:
-    CompensatorFactory() = delete;
-};
+        private:
+            CompensatorFactory() = delete;
+        };
+    } // namespace utils
+} // namespace common
+} // namespace wust_vl

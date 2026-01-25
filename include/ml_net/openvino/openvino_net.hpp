@@ -13,27 +13,30 @@
 // limitations under the License.
 #pragma once
 #include "openvino/openvino.hpp"
+namespace wust_vl {
 namespace ml_net {
-class OpenvinoNet {
-public:
-    using PppinitFun = std::function<void(ov::preprocess::PrePostProcessor&)>;
-    struct Params {
-        std::string model_path;
-        std::string device_name;
-        ov::hint::PerformanceMode mode;
-    };
-    OpenvinoNet();
-    ~OpenvinoNet();
-    bool init(const Params& params, PppinitFun ppp_init_fun);
-    ov::Tensor infer(const ov::Tensor& input_tensor);
-    std::pair<ov::element::Type, ov::Shape> getInputInfo();
-    ov::InferRequest createInferRequest();
-    ov::Tensor infer(const ov::Tensor& input_tensor, ov::InferRequest& infer_request);
-    ov::Tensor infer_thread_local(const ov::Tensor& input_tensor);
 
-private:
-    Params params_;
-    struct Impl;
-    std::unique_ptr<Impl> _impl;
-};
+    class OpenvinoNet {
+    public:
+        using PppinitFun = std::function<void(ov::preprocess::PrePostProcessor&)>;
+        struct Params {
+            std::string model_path;
+            std::string device_name;
+            ov::hint::PerformanceMode mode;
+        };
+        OpenvinoNet();
+        ~OpenvinoNet();
+        bool init(const Params& params, PppinitFun ppp_init_fun);
+        ov::Tensor infer(const ov::Tensor& input_tensor);
+        std::pair<ov::element::Type, ov::Shape> getInputInfo();
+        ov::InferRequest createInferRequest();
+        ov::Tensor infer(const ov::Tensor& input_tensor, ov::InferRequest& infer_request);
+        ov::Tensor infer_thread_local(const ov::Tensor& input_tensor);
+
+    private:
+        Params params_;
+        struct Impl;
+        std::unique_ptr<Impl> _impl;
+    };
 } // namespace ml_net
+} // namespace wust_vl
