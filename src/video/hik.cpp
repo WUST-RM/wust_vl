@@ -263,21 +263,21 @@ namespace video {
         while (self->isAlive() && !stop_signal_) {
             ImageFrame frame;
             self->heartbeat();
-            if (img_queue_.pop_wait(frame)) {
-                if (on_frame_callback_) {
-                    frame.src_img = std::move(convertToMat(frame, use_raw_));
-                    on_frame_callback_(frame);
-                }
-            } else {
-            }
-            // if (img_queue_.pop_valid(frame)) {
+            // if (img_queue_.pop_wait(frame)) {
             //     if (on_frame_callback_) {
             //         frame.src_img = std::move(convertToMat(frame, use_raw_));
             //         on_frame_callback_(frame);
             //     }
             // } else {
-            //     std::this_thread::sleep_for(std::chrono::milliseconds(1));
             // }
+            if (img_queue_.pop_valid(frame)) {
+                if (on_frame_callback_) {
+                    frame.src_img = std::move(convertToMat(frame, use_raw_));
+                    on_frame_callback_(frame);
+                }
+            } else {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
         }
     }
     void HikCamera::hikCaptureLoop(wust_vl::common::concurrency::MonitoredThread::Ptr self) {
@@ -301,9 +301,9 @@ namespace video {
                     ++frame_counter;
 
                     ImageFrame frame;
-                    auto current_time = std::chrono::steady_clock::now();
+                    const auto current_time = std::chrono::steady_clock::now();
 
-                    auto half_exposure =
+                    const auto half_exposure =
                         std::chrono::microseconds(static_cast<long>(getExposureTime() / 2));
 
                     frame.timestamp = current_time - half_exposure;
@@ -316,7 +316,7 @@ namespace video {
                     frame.data.resize(info.nFrameLen);
                     std::memcpy(frame.data.data(), out_frame.pBufAddr, info.nFrameLen);
 
-                    auto pixel_type = info.enPixelType;
+                    const auto pixel_type = info.enPixelType;
                     frame.img_type = img_type_map.at(pixel_type);
 
                     frame.step = info.nFrameLen / frame.height;
@@ -440,9 +440,10 @@ namespace video {
         }
 
         ImageFrame frame;
-        auto current_time = std::chrono::steady_clock::now();
+        const auto current_time = std::chrono::steady_clock::now();
 
-        auto half_exposure = std::chrono::microseconds(static_cast<long>(getExposureTime() / 2));
+        const auto half_exposure =
+            std::chrono::microseconds(static_cast<long>(getExposureTime() / 2));
 
         frame.timestamp = current_time - half_exposure;
 
@@ -454,7 +455,7 @@ namespace video {
         frame.data.resize(info.nFrameLen);
         std::memcpy(frame.data.data(), out_frame.pBufAddr, info.nFrameLen);
 
-        auto pixel_type = info.enPixelType;
+        const auto pixel_type = info.enPixelType;
         frame.img_type = img_type_map.at(pixel_type);
 
         frame.step = info.nFrameLen / frame.height;
@@ -493,9 +494,10 @@ namespace video {
         }
 
         ImageFrame frame;
-        auto current_time = std::chrono::steady_clock::now();
+        const auto current_time = std::chrono::steady_clock::now();
 
-        auto half_exposure = std::chrono::microseconds(static_cast<long>(getExposureTime() / 2));
+        const auto half_exposure =
+            std::chrono::microseconds(static_cast<long>(getExposureTime() / 2));
 
         frame.timestamp = current_time - half_exposure;
 
