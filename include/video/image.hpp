@@ -41,7 +41,6 @@ namespace video {
         }
         cv::Mat out;
         if (frame.pixel_type >= 0) {
-            CV_Assert(src.type() == CV_8UC1);
             cv::cvtColor(src, out, frame.pixel_type);
             return out;
         }

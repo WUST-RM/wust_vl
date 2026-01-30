@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
+#include "../common/utils/logger.hpp"
 #include "icamera.hpp"
 #include <atomic>
-#include <functional>
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <thread>

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #pragma once
-#include "common/utils/logger.hpp"
 #include "hik.hpp"
 #include "video_player.hpp"
 namespace wust_vl {

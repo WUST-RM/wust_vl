@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "video/video_player.hpp"
-#include "common/utils/logger.hpp"
 #include <chrono>
 #include <iostream>
 #include <thread>

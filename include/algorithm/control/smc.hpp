@@ -8,14 +8,6 @@ namespace algorithm {
     namespace control {
         class SMC_MIMO {
         public:
-            /**
-     * @param dim 控制维度
-     * @param B 系统控制矩阵 (dim x dim)
-     * @param lambda 滑模增益 (dim x dim 或对角矩阵)
-     * @param k 到达律增益 (dim x dim 或对角矩阵)
-     * @param phi_vec 边界层向量 (dim) 或标量，防止抖振
-     * @param alpha 控制量低通滤波系数 (0~1)
-     */
             SMC_MIMO(
                 int dim,
                 const Eigen::MatrixXd& B,
@@ -39,14 +31,6 @@ namespace algorithm {
                 s_ = Eigen::VectorXd::Zero(dim_);
                 u_filtered_ = Eigen::VectorXd::Zero(dim_);
             }
-
-            /**
-     * @brief 计算控制输入
-     * @param x 当前状态向量
-     * @param x_ref 期望状态向量
-     * @param x_dot 当前状态导数向量
-     * @return 控制输入向量
-     */
             Eigen::VectorXd computeControl(
                 const Eigen::VectorXd& x,
                 const Eigen::VectorXd& x_ref,

@@ -13,10 +13,10 @@
 // limitations under the License.
 #pragma once
 
+#include "../common/concurrency/monitored_thread.hpp"
+#include "../common/concurrency/queues.hpp"
+#include "../common/utils/logger.hpp"
 #include "MvCameraControl.h"
-#include "common/concurrency/monitored_thread.hpp"
-#include "common/concurrency/queues.hpp"
-#include "common/utils/logger.hpp"
 #include "icamera.hpp"
 #include <thread>
 #include <yaml-cpp/yaml.h>
@@ -208,7 +208,7 @@ namespace video {
             { PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2BGR },
             { PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2BGR },
             { PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2BGR },
-            { PixelType_Gvsp_RGB8_Packed, -1 },
+            { PixelType_Gvsp_RGB8_Packed, cv::COLOR_RGB2BGR },
             { PixelType_Gvsp_Mono8, cv::COLOR_GRAY2BGR },
         };
         const std::unordered_map<MvGvspPixelType, int> img_type_map = {

@@ -50,7 +50,6 @@ namespace common {
                 cond_var_.notify_all(); // 唤醒等待线程
             }
 
-            // 非阻塞尝试出队
             bool try_dequeue(T& out_item) {
                 std::lock_guard<std::mutex> lk(mutex_);
                 auto now = std::chrono::steady_clock::now();
@@ -77,8 +76,6 @@ namespace common {
                 buffer_.erase(it);
                 return true;
             }
-
-            // 阻塞式出队（新增）
             bool dequeue_wait(T& out_item, bool& timeout_skip) {
                 timeout_skip = false;
                 std::unique_lock<std::mutex> lk(mutex_);

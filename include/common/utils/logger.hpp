@@ -1,23 +1,11 @@
-// Copyright 2025 XiaoJian Wu
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 #pragma once
+
 #ifdef DEBUG
     #undef DEBUG
 #endif
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -27,262 +15,195 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+
 namespace fs = std::filesystem;
 
-// ========== 日志等级 ==========
-enum class LogLevel { DEBUG = 0, INFO, WARN, ERROR, MAIN };
+enum class LogLevel : uint8_t { DEBUG = 0, INFO, WARN, ERROR, MAIN };
 
-inline const char* levelToString(LogLevel level) {
-    switch (level) {
-        case LogLevel::MAIN:
-            return "MAIN";
-        case LogLevel::DEBUG:
-            return "DEBUG";
-        case LogLevel::INFO:
-            return " INFO";
-        case LogLevel::WARN:
-            return " WARN";
-        case LogLevel::ERROR:
-            return "ERROR";
-        default:
-            return "UNKN ";
-    }
+constexpr std::array<std::string_view, 5> kLevelNames{
+    "DEBUG", " INFO", " WARN", "ERROR", "MAIN"
+};
+
+constexpr std::array<std::string_view, 5> kLevelColors{
+    "\033[36m", // DEBUG
+    "\033[32m", // INFO
+    "\033[33m", // WARN
+    "\033[31m", // ERROR
+    "\033[37m"  // MAIN
+};
+
+constexpr std::string_view kColorReset = "\033[0m";
+
+inline constexpr std::string_view levelToString(LogLevel level) noexcept {
+    return kLevelNames[static_cast<size_t>(level)];
 }
 
-inline const char* colorForLevel(LogLevel level) {
-    switch (level) {
-        case LogLevel::MAIN:
-            return "\033[37m"; // 白色
-        case LogLevel::DEBUG:
-            return "\033[36m"; // 青色
-        case LogLevel::INFO:
-            return "\033[32m"; // 绿色
-        case LogLevel::WARN:
-            return "\033[33m"; // 黄色
-        case LogLevel::ERROR:
-            return "\033[31m"; // 红色
-        default:
-            return "\033[0m";
-    }
+inline constexpr std::string_view colorForLevel(LogLevel level) noexcept {
+    return kLevelColors[static_cast<size_t>(level)];
 }
 
-inline const char* colorReset() {
-    return "\033[0m";
-}
-
-inline LogLevel logLevelFromString(const std::string& level_str) {
-    std::string l = level_str;
-    std::transform(l.begin(), l.end(), l.begin(), ::toupper);
-    if (l == "MAIN")
-        return LogLevel::MAIN;
-    if (l == "DEBUG")
-        return LogLevel::DEBUG;
-    if (l == "INFO")
-        return LogLevel::INFO;
-    if (l == "WARN")
-        return LogLevel::WARN;
-    if (l == "ERROR")
-        return LogLevel::ERROR;
-    throw std::invalid_argument("Invalid log level string: " + level_str);
-}
-
-// 时间戳
 inline std::string getTimeStr() {
-    auto now = std::chrono::system_clock::now();
-    auto now_tt = std::chrono::system_clock::to_time_t(now);
-    auto now_ms =
+    using clock = std::chrono::system_clock;
+    const auto now = clock::now();
+    const auto tt = clock::to_time_t(now);
+    const auto ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+
+    std::tm tm{};
+    localtime_r(&tt, &tm);
+
     std::ostringstream oss;
-    oss << std::put_time(std::localtime(&now_tt), "%Y-%m-%d %H:%M:%S") << "." << std::setfill('0')
-        << std::setw(3) << now_ms.count();
+    oss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S")
+        << '.' << std::setw(3) << std::setfill('0') << ms.count();
     return oss.str();
 }
 
-// ========== 核心 Logger ==========
 class Logger {
 public:
     static Logger& getInstance() {
-        static Logger instance;
-        return instance;
+        static Logger inst;
+        return inst;
     }
 
+    void setLevel(LogLevel level) noexcept { log_level_ = level; }
+
     void setLevel(const std::string& level_str) {
-        setLevel(logLevelFromString(level_str));
-    }
-    void setLevel(LogLevel level) {
-        log_level_ = level;
+        std::string s = level_str;
+        std::transform(s.begin(), s.end(), s.begin(), ::toupper);
+
+        if (s == "DEBUG") setLevel(LogLevel::DEBUG);
+        else if (s == "INFO") setLevel(LogLevel::INFO);
+        else if (s == "WARN") setLevel(LogLevel::WARN);
+        else if (s == "ERROR") setLevel(LogLevel::ERROR);
+        else if (s == "MAIN") setLevel(LogLevel::MAIN);
+        else throw std::invalid_argument("Invalid log level: " + level_str);
     }
 
     void enableFileOutput(const std::string& filename) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        file_stream_.open(filename, std::ios::out | std::ios::app);
-        file_output_enabled_ = file_stream_.is_open();
+        std::scoped_lock lock(mutex_);
+        file_.open(filename, std::ios::app);
+        file_enabled_ = file_.is_open();
     }
 
-    void disableColorOutput() {
-        color_output_enabled_ = false;
-    }
-    void enableSimplifiedOutput(bool enabled) {
-        simplified_output_enabled_ = enabled;
-    }
+    void disableColorOutput() noexcept { color_enabled_ = false; }
+    void enableSimplifiedOutput(bool v) noexcept { simplified_ = v; }
 
-    LogLevel getLevel() const {
-        return log_level_;
-    }
-    bool shouldLog(LogLevel level) const {
-        return level >= log_level_;
-    }
-    bool isSimplifiedOutputEnabled() const {
-        return simplified_output_enabled_;
-    }
-    std::ofstream& fileStream() {
-        return file_stream_;
-    }
-    bool isFileOutputEnabled() const {
-        return file_output_enabled_;
-    }
-    bool isColorOutputEnabled() const {
-        return color_output_enabled_;
-    }
-    std::mutex& getMutex() {
-        return mutex_;
-    }
+    bool shouldLog(LogLevel l) const noexcept { return l >= log_level_; }
+    bool fileEnabled() const noexcept { return file_enabled_; }
+    bool colorEnabled() const noexcept { return color_enabled_; }
+    bool simplified() const noexcept { return simplified_; }
+
+    std::ofstream& file() noexcept { return file_; }
+    std::mutex& mutex() noexcept { return mutex_; }
 
 private:
-    Logger():
-        log_level_(LogLevel::DEBUG),
-        file_output_enabled_(false),
-        color_output_enabled_(true),
-        simplified_output_enabled_(false) {}
+    Logger() = default;
     ~Logger() {
-        if (file_stream_.is_open())
-            file_stream_.close();
+        if (file_.is_open()) file_.close();
     }
 
-    LogLevel log_level_;
-    bool file_output_enabled_;
-    bool color_output_enabled_;
-    bool simplified_output_enabled_;
-    std::ofstream file_stream_;
-    mutable std::mutex mutex_;
+    LogLevel log_level_{LogLevel::DEBUG};
+    bool file_enabled_{false};
+    bool color_enabled_{true};
+    bool simplified_{false};
+
+    std::ofstream file_;
+    std::mutex mutex_;
 };
 
-// ========== 流式日志类 ==========
 class LoggerStream {
 public:
-    LoggerStream(LogLevel level, const std::string& node, const char* file, int line):
-        level_(level),
-        node_name_(node),
-        file_(file),
-        line_(line) {}
+    LoggerStream(LogLevel lvl, std::string node, const char* file, int line):
+        level_(lvl), node_(std::move(node)), file_(file), line_(line) {}
 
     ~LoggerStream() {
         if (throwing_) {
-            std::ostringstream full_msg;
-            full_msg << buffer_.str();
-            logAndThrow(full_msg.str(), node_name_, file_, line_);
-            return; // logAndThrow 内部会 throw
+            flushAndThrow();
+            return;
         }
-
-        std::ostringstream full_msg;
-        if (level_ == LogLevel::MAIN || !Logger::getInstance().isSimplifiedOutputEnabled()) {
-            full_msg << "[" << getTimeStr() << "]"
-                     << "[" << levelToString(level_) << "]"
-                     << "[" << node_name_ << "]"
-                     << "[" << file_ << ":" << line_ << "] " << buffer_.str();
-        } else {
-            full_msg << "[" << levelToString(level_) << "]"
-                     << "[" << node_name_ << "] " << buffer_.str();
-        }
-
-        std::lock_guard<std::mutex> lock(Logger::getInstance().getMutex());
-
-        if (Logger::getInstance().shouldLog(level_)) {
-            if (Logger::getInstance().isColorOutputEnabled()) {
-                std::cout << colorForLevel(level_) << full_msg.str() << colorReset() << std::endl;
-            } else {
-                std::cout << full_msg.str() << std::endl;
-            }
-        }
-
-        if (Logger::getInstance().isFileOutputEnabled()) {
-            Logger::getInstance().fileStream() << full_msg.str() << std::endl;
-        }
+        flush();
     }
 
     template<typename T>
-    LoggerStream& operator<<(const T& val) {
-        buffer_ << val;
+    LoggerStream& operator<<(const T& v) {
+        buf_ << v;
         return *this;
     }
 
-    // 支持流式抛异常
-    LoggerStream& throwError() {
+    LoggerStream& throwError() noexcept {
         throwing_ = true;
         return *this;
     }
 
 private:
-    void logAndThrow(const std::string& msg, const std::string& node, const char* file, int line) {
-        std::ostringstream full_msg;
-        full_msg << "[" << getTimeStr() << "]"
-                 << "[ERROR]"
-                 << "[" << node << "]"
-                 << "[" << file << ":" << line << "] " << msg;
+    void flush() {
+        Logger& log = Logger::getInstance();
+        if (!log.shouldLog(level_)) return;
 
-        std::lock_guard<std::mutex> lock(Logger::getInstance().getMutex());
-
-        if (Logger::getInstance().isColorOutputEnabled()) {
-            std::cerr << colorForLevel(LogLevel::ERROR) << full_msg.str() << colorReset()
-                      << std::endl;
+        std::ostringstream out;
+        if (level_ == LogLevel::MAIN || !log.simplified()) {
+            out << "[" << getTimeStr() << "]"
+                << "[" << levelToString(level_) << "]"
+                << "[" << node_ << "]"
+                << "[" << file_ << ":" << line_ << "] "
+                << buf_.str();
         } else {
-            std::cerr << full_msg.str() << std::endl;
+            out << "[" << levelToString(level_) << "]"
+                << "[" << node_ << "] "
+                << buf_.str();
         }
 
-        if (Logger::getInstance().isFileOutputEnabled()) {
-            Logger::getInstance().fileStream() << full_msg.str() << std::endl;
+        std::scoped_lock lock(log.mutex());
+
+        if (log.colorEnabled()) {
+            std::cout << colorForLevel(level_) << out.str()
+                      << kColorReset << std::endl;
+        } else {
+            std::cout << out.str() << std::endl;
         }
 
-        throw std::runtime_error(msg);
+        if (log.fileEnabled()) {
+            log.file() << out.str() << std::endl;
+        }
+    }
+
+    [[noreturn]] void flushAndThrow() {
+        flush();
+        throw std::runtime_error(buf_.str());
     }
 
     LogLevel level_;
-    std::ostringstream buffer_;
-    std::string node_name_;
+    std::ostringstream buf_;
+    std::string node_;
     const char* file_;
     int line_;
-    bool throwing_ = false;
+    bool throwing_{false};
 };
 
 inline void initLogger(
-    const std::string& level_str,
-    const std::string& log_dir = "./logs",
-    bool use_logcli = true,
-    bool use_logfile = true,
-    bool simplified_output = false
+    const std::string& level,
+    const std::string& dir = "./logs",
+    bool cli = true,
+    bool file = true,
+    bool simplified = false
 ) {
-    Logger& logger = Logger::getInstance();
-    logger.setLevel(logLevelFromString(level_str));
-    logger.enableSimplifiedOutput(simplified_output);
+    auto& log = Logger::getInstance();
+    log.setLevel(level);
+    log.enableSimplifiedOutput(simplified);
 
-    if (!use_logcli)
-        logger.setLevel(LogLevel::ERROR);
+    if (!cli) log.setLevel(LogLevel::ERROR);
 
-    fs::path dir_path(log_dir);
-    if (!dir_path.is_absolute())
-        dir_path = fs::absolute(dir_path);
+    fs::create_directories(dir);
+    if (!file) return;
 
-    std::string timestamp = getTimeStr();
-    std::replace(timestamp.begin(), timestamp.end(), ':', '-');
-    std::replace(timestamp.begin(), timestamp.end(), ' ', '_');
-    fs::path filename = dir_path / ("log_" + timestamp + ".txt");
-    fs::create_directories(dir_path);
+    auto name = getTimeStr();
+    std::replace(name.begin(), name.end(), ':', '-');
+    std::replace(name.begin(), name.end(), ' ', '_');
 
-    if (use_logfile)
-        logger.enableFileOutput(filename.string());
+    log.enableFileOutput((fs::path(dir) / ("log_" + name + ".txt")).string());
 }
 
-// ========== 宏定义 ==========
 #define WUST_MAIN(node) LoggerStream(LogLevel::MAIN, node, __FILE__, __LINE__)
 #define WUST_DEBUG(node) LoggerStream(LogLevel::DEBUG, node, __FILE__, __LINE__)
 #define WUST_INFO(node) LoggerStream(LogLevel::INFO, node, __FILE__, __LINE__)

@@ -11,7 +11,6 @@
 namespace wust_vl {
 namespace common {
     namespace utils {
-        // 🔹 默认 MotionTraits
         template<typename T, typename Enable = void>
         struct MotionTraits {
             static void unwrap(const T& /*prev*/, T& /*curr*/) {}
@@ -20,11 +19,9 @@ namespace common {
             }
         };
 
-        // 🔹 特化四元数 Quat 使用 SLERP
         template<>
         struct MotionTraits<Eigen::Quaterniond> {
             static void unwrap(const Eigen::Quaterniond& prev, Eigen::Quaterniond& curr) {
-                // 确保四元数连续（避免跳反）
                 if (prev.dot(curr) < 0.0)
                     curr.coeffs() *= -1.0;
             }
@@ -35,7 +32,6 @@ namespace common {
             }
         };
 
-        // 🔹 辅助 SFINAE 检查
         template<typename T, typename = void>
         struct has_motion_traits: std::false_type {};
 
@@ -48,7 +44,6 @@ namespace common {
                          T>::interpolate(std::declval<const T&>(), std::declval<const T&>(), 0.0)
                 )>>: std::true_type {};
 
-        // 🔹 通用 MotionBufferGeneric
         template<typename T, size_t BUFFER_SIZE = 512>
         class MotionBufferGeneric {
             static_assert(

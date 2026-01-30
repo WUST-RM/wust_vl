@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include "video/hik.hpp"
-#include "common/utils/logger.hpp"
 #include <pwd.h>
 
 namespace wust_vl {
@@ -183,20 +182,76 @@ namespace video {
         trigger_type_ = type;
         trigger_source_ = source;
         trigger_activation_ = activation;
-        if (type != TriggerType::None) {
-            if (MV_CC_SetEnumValueByString(camera_handle_, "TriggerMode", "On") != MV_OK)
-                return false;
-            if (MV_CC_SetEnumValueByString(camera_handle_, "TriggerSource", source.c_str())
-                != MV_OK)
-                return false;
 
-            const char* act = (activation == 1 ? "RisingEdge" : "FallingEdge");
-            if (MV_CC_SetEnumValueByString(camera_handle_, "TriggerActivation", act) != MV_OK)
-                return false;
+        WUST_INFO(hik_logger_) << "[setTrigger] enter: type=" << static_cast<int>(type)
+                               << ", source=" << source << ", activation=" << activation;
 
-            WUST_INFO(hik_logger_) << "Trigger enabled: src=" << source << ", act=" << act;
+        // ---------- Disable trigger ----------
+        if (type == TriggerType::None) {
+            int ret = MV_CC_SetEnumValueByString(camera_handle_, "TriggerMode", "Off");
+            if (ret != MV_OK) {
+                WUST_ERROR(hik_logger_)
+                    << "[setTrigger] Failed to disable TriggerMode, ret=" << ret;
+                return false;
+            }
+
+            WUST_INFO(hik_logger_) << "[setTrigger] Trigger disabled";
+            return true;
         }
 
+        // ---------- Acquisition must be Continuous ----------
+        {
+            int ret = MV_CC_SetEnumValueByString(camera_handle_, "AcquisitionMode", "Continuous");
+            if (ret != MV_OK) {
+                WUST_ERROR(hik_logger_)
+                    << "[setTrigger] Failed to set AcquisitionMode=Continuous, ret=" << ret;
+                return false;
+            }
+
+            WUST_INFO(hik_logger_) << "[setTrigger] AcquisitionMode set to Continuous";
+        }
+
+        // ---------- Enable trigger ----------
+        {
+            int ret = MV_CC_SetEnumValueByString(camera_handle_, "TriggerMode", "On");
+            if (ret != MV_OK) {
+                WUST_ERROR(hik_logger_) << "[setTrigger] Failed to enable TriggerMode, ret=" << ret;
+                return false;
+            }
+
+            WUST_INFO(hik_logger_) << "[setTrigger] TriggerMode enabled";
+        }
+
+        // ---------- Trigger source ----------
+        {
+            int ret = MV_CC_SetEnumValueByString(camera_handle_, "TriggerSource", source.c_str());
+            if (ret != MV_OK) {
+                WUST_ERROR(hik_logger_)
+                    << "[setTrigger] Failed to set TriggerSource=" << source << ", ret=" << ret;
+                return false;
+            }
+
+            WUST_INFO(hik_logger_) << "[setTrigger] TriggerSource set to " << source;
+        }
+
+        // ---------- Trigger activation (hardware only) ----------
+        if (type == TriggerType::Hardware) {
+            const char* act = (activation == 1) ? "RisingEdge" : "FallingEdge";
+
+            int ret = MV_CC_SetEnumValueByString(camera_handle_, "TriggerActivation", act);
+            if (ret != MV_OK) {
+                WUST_ERROR(hik_logger_)
+                    << "[setTrigger] Failed to set TriggerActivation=" << act << ", ret=" << ret;
+                return false;
+            }
+
+            WUST_INFO(hik_logger_) << "[setTrigger] Hardware trigger enabled: "
+                                   << "src=" << source << ", act=" << act;
+        } else {
+            WUST_INFO(hik_logger_) << "[setTrigger] Software trigger enabled";
+        }
+
+        WUST_INFO(hik_logger_) << "[setTrigger] done successfully";
         return true;
     }
 
@@ -263,21 +318,21 @@ namespace video {
         while (self->isAlive() && !stop_signal_) {
             ImageFrame frame;
             self->heartbeat();
-            // if (img_queue_.pop_wait(frame)) {
-            //     if (on_frame_callback_) {
-            //         frame.src_img = std::move(convertToMat(frame, use_raw_));
-            //         on_frame_callback_(frame);
-            //     }
-            // } else {
-            // }
-            if (img_queue_.pop_valid(frame)) {
+            if (img_queue_.pop_wait(frame)) {
                 if (on_frame_callback_) {
-                    frame.src_img = std::move(convertToMat(frame, use_raw_));
+                    frame.src_img = convertToMat(frame, use_raw_);
                     on_frame_callback_(frame);
                 }
             } else {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
+            // if (img_queue_.pop_valid(frame)) {
+            //     if (on_frame_callback_) {
+            //         frame.src_img = convertToMat(frame, use_raw_);
+            //         on_frame_callback_(frame);
+            //     }
+            // } else {
+            //     std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            // }
         }
     }
     void HikCamera::hikCaptureLoop(wust_vl::common::concurrency::MonitoredThread::Ptr self) {
