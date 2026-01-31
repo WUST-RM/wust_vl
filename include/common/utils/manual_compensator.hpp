@@ -31,6 +31,10 @@ namespace common {
             double d_min, d_max;
             double h_min, h_max;
             double pitch_off, yaw_off;
+            bool operator==(const OffsetEntry& b) const {
+                return d_min == b.d_min && d_max == b.d_max && h_min == b.h_min
+                    && h_max == b.h_max && pitch_off == b.pitch_off && yaw_off == b.yaw_off;
+            }
         };
 
         class LineRegion {

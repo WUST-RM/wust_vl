@@ -19,18 +19,18 @@ namespace wust_vl::ml_net {
         } \
     } while (0)
 class TRTLogger: public nvinfer1::ILogger {
-    public:
-        explicit TRTLogger(
-            nvinfer1::ILogger::Severity severity = nvinfer1::ILogger::Severity::kWARNING
-        ):
-            severity_(severity) {}
-        void log(nvinfer1::ILogger::Severity severity, const char* msg) noexcept override {
-            if (severity <= severity_) {
-                std::cerr << msg << std::endl;
-            }
+public:
+    explicit TRTLogger(
+        nvinfer1::ILogger::Severity severity = nvinfer1::ILogger::Severity::kWARNING
+    ):
+        severity_(severity) {}
+    void log(nvinfer1::ILogger::Severity severity, const char* msg) noexcept override {
+        if (severity <= severity_) {
+            std::cerr << msg << std::endl;
         }
-        nvinfer1::ILogger::Severity severity_;
-    };
+    }
+    nvinfer1::ILogger::Severity severity_;
+};
 struct TensorRTNet::Impl {
     Impl() = default;
     ~Impl() {
@@ -68,6 +68,7 @@ struct TensorRTNet::Impl {
 
         input_name_ = engine_->getIOTensorName(0);
         output_name_ = engine_->getIOTensorName(1);
+        std::cout<<"input_name_: "<<input_name_<<" output_name_: "<<output_name_<<std::endl;
         input_idx_ = 0;
         output_idx_ = 1;
 
@@ -156,7 +157,6 @@ struct TensorRTNet::Impl {
         std::cout << "Engine built & saved: " << engine_path << '\n';
     }
 
-
     void input2Device(const void* host_input) {
         TRT_CHECK(cudaMemcpyAsync(
             device_buffers_[input_idx_],
@@ -175,7 +175,6 @@ struct TensorRTNet::Impl {
             cudaMemcpyDeviceToHost,
             stream_
         ));
-        TRT_CHECK(cudaStreamSynchronize(stream_));
         return output_buffer_.data();
     }
 
@@ -186,7 +185,6 @@ struct TensorRTNet::Impl {
         if (!ctx->enqueueV3(stream_))
             throw std::runtime_error("enqueueV3 failed");
     }
-
 
     nvinfer1::IExecutionContext* getAContext() {
         return engine_->createExecutionContext();
