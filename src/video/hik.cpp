@@ -330,7 +330,8 @@ namespace video {
         cv::Mat src(height, width, img_type, buf, step);
 
         if (use_raw) {
-            img_frame.src_img = src;
+            img_frame.src_img = src.clone();
+            MV_CC_FreeImageBuffer(camera_handle_, &f.out_frame);
             return img_frame;
         }
         const auto& map_ref = use_rgb_ ? (use_ea_ ? PIXEL_MAP_RGB_EA : PIXEL_MAP_RGB)
