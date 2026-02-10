@@ -62,69 +62,74 @@ namespace video {
             }
             return "None";
         }
-#define HIK_SET_FLOAT_RANGE(camera_handle, param, val) \
-    do { \
-        MVCC_FLOATVALUE _fv {}; \
-        int _s = MV_CC_GetFloatValue(camera_handle, param, &_fv); \
-        if (_s == MV_OK) { \
-            double _c = std::clamp((double)val, (double)_fv.fMin, (double)_fv.fMax); \
-            int _r = MV_CC_SetFloatValue(camera_handle, param, _c); \
-            if (_r == MV_OK) \
-                WUST_INFO("hik_camera") << param << " set to " << _c; \
-            else \
-                WUST_ERROR("hik_camera") << "Failed to set " << param << ", status=" << _r; \
-        } else { \
-            WUST_ERROR("hik_camera") << "Failed to get " << param << " range, status=" << _s; \
-        } \
-    } while (0)
-#define HIK_SET_INT_RANGE(camera_handle, param, val) \
-    do { \
-        MVCC_INTVALUE _iv {}; \
-        int _s = MV_CC_GetIntValue(camera_handle, param, &_iv); \
-        if (_s == MV_OK) { \
-            int64_t _c = std::clamp((int64_t)val, (int64_t)_iv.nMin, (int64_t)_iv.nMax); \
-            int _r = MV_CC_SetIntValue(camera_handle, param, _c); \
-            if (_r == MV_OK) { \
-                WUST_INFO("hik_camera") << param << " set to " << _c; \
-            } else { \
-                WUST_ERROR("hik_camera") << "Failed to set " << param << ", status=" << _r; \
-            } \
-        } else { \
-            WUST_ERROR("hik_camera") << "Failed to get " << param << " range, status=" << _s; \
-        } \
-    } while (0)
-#define HIK_SET_BOOL(camera_handle, param, val) \
-    do { \
-        int _r = MV_CC_SetBoolValue(camera_handle, param, (bool)(val)); \
-        if (_r == MV_OK) { \
-            WUST_INFO("hik_camera") << param << " set to " << ((val) ? 1 : 0); \
-        } else { \
-            WUST_ERROR("hik_camera") << "Failed to set " << param << ", status=" << _r; \
-        } \
-    } while (0)
-#define HIK_SET_ENUM_STR(camera_handle, param, val_str) \
-    do { \
-        int _r = MV_CC_SetEnumValueByString(camera_handle, param, (val_str).c_str()); \
-        if (_r == MV_OK) { \
-            WUST_INFO("hik_camera") << param << " set to " << (val_str); \
-        } else { \
-            WUST_ERROR("hik_camera") << "Failed to set " << param << ", status=" << _r; \
-        } \
-    } while (0)
-        template<typename T>
-        inline void HikSetRangeDispatch(void* camera_handle, const char* param, const T& val) {
-            if constexpr (std::is_integral_v<T> && !std::is_same_v<T, bool>) {
-                HIK_SET_INT_RANGE(camera_handle, param, val);
-            } else if constexpr (std::is_floating_point_v<T>) {
-                HIK_SET_FLOAT_RANGE(camera_handle, param, val);
-            } else if constexpr (std::is_same_v<T, bool>) {
-                HIK_SET_BOOL(camera_handle, param, val);
-            } else if constexpr (std::is_same_v<T, std::string>) {
-                HIK_SET_ENUM_STR(camera_handle, param, val);
+        inline void HikSetFloatRange(void* camera_handle, const char* param, double val) {
+            MVCC_FLOATVALUE fv {};
+            int s = MV_CC_GetFloatValue(camera_handle, param, &fv);
+            if (s != MV_OK) {
+                WUST_ERROR("hik_camera") << "Failed to get " << param << " range, status=" << s;
+                return;
+            }
+
+            double c = std::clamp(val, (double)fv.fMin, (double)fv.fMax);
+            int r = MV_CC_SetFloatValue(camera_handle, param, c);
+            if (r == MV_OK) {
+                WUST_INFO("hik_camera") << param << " set to " << c;
             } else {
-                static_assert(sizeof(T) == 0, "Unsupported HikCamera param type");
+                WUST_ERROR("hik_camera") << "Failed to set " << param << ", status=" << r;
             }
         }
+        inline void HikSetIntRange(void* camera_handle, const char* param, int64_t val) {
+            MVCC_INTVALUE iv {};
+            int s = MV_CC_GetIntValue(camera_handle, param, &iv);
+            if (s != MV_OK) {
+                WUST_ERROR("hik_camera") << "Failed to get " << param << " range, status=" << s;
+                return;
+            }
+
+            int64_t c = std::clamp(val, static_cast<int64_t>(iv.nMin), static_cast<int64_t>(iv.nMax));
+            int r = MV_CC_SetIntValue(camera_handle, param, c);
+            if (r == MV_OK) {
+                WUST_INFO("hik_camera") << param << " set to " << c;
+            } else {
+                WUST_ERROR("hik_camera") << "Failed to set " << param << ", status=" << r;
+            }
+        }
+        inline void HikSetBool(void* camera_handle, const char* param, bool val) {
+            int r = MV_CC_SetBoolValue(camera_handle, param, val);
+            if (r == MV_OK) {
+                WUST_INFO("hik_camera") << param << " set to " << (val ? 1 : 0);
+            } else {
+                WUST_ERROR("hik_camera") << "Failed to set " << param << ", status=" << r;
+            }
+        }
+        inline void HikSetEnumStr(void* camera_handle, const char* param, const std::string& val) {
+            int r = MV_CC_SetEnumValueByString(camera_handle, param, val.c_str());
+            if (r == MV_OK) {
+                WUST_INFO("hik_camera") << param << " set to " << val;
+            } else {
+                WUST_ERROR("hik_camera") << "Failed to set " << param << ", status=" << r;
+            }
+        }
+
+        template<typename T>
+        inline void HikSetRangeDispatch(void* camera_handle, const char* param, const T& val) {
+            if constexpr (std::is_same_v<T, bool>) {
+                HikSetBool(camera_handle, param, val);
+
+            } else if constexpr (std::is_integral_v<T>) {
+                HikSetIntRange(camera_handle, param, static_cast<int64_t>(val));
+
+            } else if constexpr (std::is_floating_point_v<T>) {
+                HikSetFloatRange(camera_handle, param, static_cast<double>(val));
+
+            } else if constexpr (std::is_same_v<T, std::string>) {
+                HikSetEnumStr(camera_handle, param, val);
+
+            } else {
+                static_assert(!sizeof(T), "Unsupported HikCamera param type");
+            }
+        }
+
 #define HIK_GEN_MEMBER_GET_SET(type, camera_handle, param) \
     type param##_val {}; \
     inline void set##param(const type& v) { \
