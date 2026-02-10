@@ -18,6 +18,7 @@
 #include "../common/utils/logger.hpp"
 #include "MvCameraControl.h"
 #include "icamera.hpp"
+#include <opencv2/opencv.hpp>
 #include <thread>
 #include <yaml-cpp/yaml.h>
 namespace wust_vl {
@@ -25,6 +26,11 @@ namespace video {
 
     class HikCamera: public ICameraDevice {
     public:
+        struct Frame {
+            MV_FRAME_OUT out_frame;
+            std::chrono::steady_clock::time_point timestamp;
+        };
+        inline ImageFrame convertToMat(Frame& f, bool use_raw = false);
         HikCamera();
         ~HikCamera();
         enum class TriggerType { None, Software, Hardware };

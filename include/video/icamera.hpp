@@ -1,8 +1,14 @@
 #pragma once
-#include "image.hpp"
+#include <chrono>
+#include <functional>
+#include <opencv2/core/mat.hpp>
 #include <yaml-cpp/node/node.h>
 namespace wust_vl {
 namespace video {
+    struct ImageFrame {
+        cv::Mat src_img;
+        std::chrono::steady_clock::time_point timestamp;
+    };
 
     class ICameraDevice {
     public:

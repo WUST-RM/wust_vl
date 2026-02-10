@@ -68,7 +68,8 @@ struct TensorRTNet::Impl {
 
         input_name_ = engine_->getIOTensorName(0);
         output_name_ = engine_->getIOTensorName(1);
-        std::cout<<"input_name_: "<<input_name_<<" output_name_: "<<output_name_<<std::endl;
+        std::cout << "input_name_: " << input_name_ << " output_name_: " << output_name_
+                  << std::endl;
         input_idx_ = 0;
         output_idx_ = 1;
 

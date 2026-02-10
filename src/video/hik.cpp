@@ -314,20 +314,50 @@ namespace video {
         WUST_INFO(hik_logger_) << "Camera restarted successfully!";
         return true;
     }
+    ImageFrame HikCamera::convertToMat(Frame& f, bool use_raw) {
+        ImageFrame img_frame;
+        img_frame.timestamp = f.timestamp;
+
+        const auto& info = f.out_frame.stFrameInfo;
+        int width = info.nWidth;
+        int height = info.nHeight;
+        int step = info.nFrameLen / height;
+
+        uint8_t* buf = f.out_frame.pBufAddr;
+        const auto pixel_type = info.enPixelType;
+        int img_type = img_type_map.at(pixel_type);
+
+        cv::Mat src(height, width, img_type, buf, step);
+
+        if (use_raw) {
+            img_frame.src_img = src;
+            return img_frame;
+        }
+        const auto& map_ref = use_rgb_ ? (use_ea_ ? PIXEL_MAP_RGB_EA : PIXEL_MAP_RGB)
+                                       : (use_ea_ ? PIXEL_MAP_BGR_EA : PIXEL_MAP_BGR);
+
+        int cvt_code = map_ref.at(pixel_type);
+        if (cvt_code >= 0) {
+            cv::cvtColor(src, img_frame.src_img, cvt_code);
+        } else {
+            img_frame.src_img = src.clone();
+        }
+        MV_CC_FreeImageBuffer(camera_handle_, &f.out_frame);
+        return img_frame;
+    }
+
     void HikCamera::hikProcessLoop(wust_vl::common::concurrency::MonitoredThread::Ptr self) {
         while (self->isAlive() && !stop_signal_) {
             ImageFrame frame;
             self->heartbeat();
             if (img_queue_.pop_wait(frame)) {
                 if (on_frame_callback_) {
-                    frame.src_img = convertToMat(frame, use_raw_);
                     on_frame_callback_(frame);
                 }
             } else {
             }
             // if (img_queue_.pop_valid(frame)) {
             //     if (on_frame_callback_) {
-            //         frame.src_img = convertToMat(frame, use_raw_);
             //         on_frame_callback_(frame);
             //     }
             // } else {
@@ -336,7 +366,7 @@ namespace video {
         }
     }
     void HikCamera::hikCaptureLoop(wust_vl::common::concurrency::MonitoredThread::Ptr self) {
-        MV_FRAME_OUT out_frame;
+        Frame frame;
         WUST_INFO(hik_logger_) << "Starting image capture loop!";
 
         auto fail_start_time = std::chrono::steady_clock::now();
@@ -349,13 +379,12 @@ namespace video {
         try {
             while (self->isAlive() && !stop_signal_) {
                 self->heartbeat();
-                auto start_time = std::chrono::steady_clock::now();
-                int n_ret = MV_CC_GetImageBuffer(camera_handle_, &out_frame, 100);
+
+                int n_ret = MV_CC_GetImageBuffer(camera_handle_, &frame.out_frame, 100);
                 if (n_ret == MV_OK) {
                     in_fail_state = false;
                     ++frame_counter;
 
-                    ImageFrame frame;
                     const auto current_time = std::chrono::steady_clock::now();
 
                     const auto half_exposure =
@@ -363,35 +392,13 @@ namespace video {
 
                     frame.timestamp = current_time - half_exposure;
 
-                    const auto& info = out_frame.stFrameInfo;
-
-                    frame.width = info.nWidth;
-                    frame.height = info.nHeight;
-
-                    frame.data.resize(info.nFrameLen);
-                    std::memcpy(frame.data.data(), out_frame.pBufAddr, info.nFrameLen);
-
-                    const auto pixel_type = info.enPixelType;
-                    frame.img_type = img_type_map.at(pixel_type);
-
-                    frame.step = info.nFrameLen / frame.height;
-
-                    CV_Assert(frame.step > 0);
-                    CV_Assert(frame.step * frame.height <= frame.data.size());
-
-                    const auto& map_ref = use_rgb_ ? (use_ea_ ? PIXEL_MAP_RGB_EA : PIXEL_MAP_RGB)
-                                                   : (use_ea_ ? PIXEL_MAP_BGR_EA : PIXEL_MAP_BGR);
-
-                    frame.pixel_type = map_ref.at(pixel_type);
-
-                    img_queue_.push(std::move(frame));
-                    MV_CC_FreeImageBuffer(camera_handle_, &out_frame);
-
+                    img_queue_.push(std::move(convertToMat(frame, use_raw_)));
                     if (std::chrono::duration_cast<std::chrono::seconds>(
                             current_time - last_frame_rate_check
                         )
-                            .count()
-                        >= 1)
+                                .count()
+                            >= 1
+                        && AcquisitionFrameRateEnable_val)
                     {
                         float actual_fps = static_cast<float>(frame_counter);
                         frame_counter = 0;
@@ -487,47 +494,24 @@ namespace video {
             MV_CC_SetCommandValue(camera_handle_, "TriggerSoftware");
         }
 
-        MV_FRAME_OUT out_frame;
-        int n_ret = MV_CC_GetImageBuffer(camera_handle_, &out_frame, 1000); // 1s timeout
+        Frame frame;
+        int n_ret = MV_CC_GetImageBuffer(camera_handle_, &frame.out_frame, 1000); // 1s timeout
         if (n_ret != MV_OK) {
             WUST_ERROR(hik_logger_) << "Failed to get image buffer in read()";
             return false;
         }
 
-        ImageFrame frame;
         const auto current_time = std::chrono::steady_clock::now();
 
         const auto half_exposure =
             std::chrono::microseconds(static_cast<long>(getExposureTime() / 2));
 
         frame.timestamp = current_time - half_exposure;
-
-        const auto& info = out_frame.stFrameInfo;
-
-        frame.width = info.nWidth;
-        frame.height = info.nHeight;
-
-        frame.data.resize(info.nFrameLen);
-        std::memcpy(frame.data.data(), out_frame.pBufAddr, info.nFrameLen);
-
-        const auto pixel_type = info.enPixelType;
-        frame.img_type = img_type_map.at(pixel_type);
-
-        frame.step = info.nFrameLen / frame.height;
-
-        CV_Assert(frame.step > 0);
-        CV_Assert(frame.step * frame.height <= frame.data.size());
-
-        const auto& map_ref = use_rgb_ ? (use_ea_ ? PIXEL_MAP_RGB_EA : PIXEL_MAP_RGB)
-                                       : (use_ea_ ? PIXEL_MAP_BGR_EA : PIXEL_MAP_BGR);
-
-        frame.pixel_type = map_ref.at(pixel_type);
+        ImageFrame image_frame = convertToMat(frame, use_raw_);
 
         if (on_frame_callback_) {
-            on_frame_callback_(frame);
+            on_frame_callback_(image_frame);
         }
-
-        MV_CC_FreeImageBuffer(camera_handle_, &out_frame);
 
         return false;
     }
@@ -541,14 +525,13 @@ namespace video {
             MV_CC_SetCommandValue(camera_handle_, "TriggerSoftware");
         }
 
-        MV_FRAME_OUT out_frame;
-        int n_ret = MV_CC_GetImageBuffer(camera_handle_, &out_frame, 1000); // 1s timeout
+        Frame frame;
+        int n_ret = MV_CC_GetImageBuffer(camera_handle_, &frame.out_frame, 1000); // 1s timeout
         if (n_ret != MV_OK) {
             WUST_ERROR(hik_logger_) << "Failed to get image buffer in read()";
             return ImageFrame();
         }
 
-        ImageFrame frame;
         const auto current_time = std::chrono::steady_clock::now();
 
         const auto half_exposure =
@@ -556,29 +539,8 @@ namespace video {
 
         frame.timestamp = current_time - half_exposure;
 
-        const auto& info = out_frame.stFrameInfo;
-
-        frame.width = info.nWidth;
-        frame.height = info.nHeight;
-
-        frame.data.resize(info.nFrameLen);
-        std::memcpy(frame.data.data(), out_frame.pBufAddr, info.nFrameLen);
-
-        auto pixel_type = info.enPixelType;
-        frame.img_type = img_type_map.at(pixel_type);
-
-        frame.step = info.nFrameLen / frame.height;
-
-        CV_Assert(frame.step > 0);
-        CV_Assert(frame.step * frame.height <= frame.data.size());
-
-        const auto& map_ref = use_rgb_ ? (use_ea_ ? PIXEL_MAP_RGB_EA : PIXEL_MAP_RGB)
-                                       : (use_ea_ ? PIXEL_MAP_BGR_EA : PIXEL_MAP_BGR);
-
-        frame.pixel_type = map_ref.at(pixel_type);
-
-        MV_CC_FreeImageBuffer(camera_handle_, &out_frame);
-        return frame;
+        ImageFrame image_frame = convertToMat(frame, use_raw_);
+        return image_frame;
     }
 } // namespace video
 } // namespace wust_vl
