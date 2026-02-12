@@ -71,7 +71,7 @@ namespace video {
         ImageFrame frame;
         frame.src_img = std::move(frame_bgr);
         frame.timestamp = std::chrono::steady_clock::now();
-
+        frame.pixel_format = PixelFormat::RGB;
         if (on_frame_callback_) {
             on_frame_callback_(frame);
         }
@@ -101,7 +101,7 @@ namespace video {
             cv::cvtColor(frame_bgr, frame_bgr, cv::COLOR_BGR2RGB);
         frame.src_img = std::move(frame_bgr);
         frame.timestamp = std::chrono::steady_clock::now();
-
+        frame.pixel_format = PixelFormat::RGB;
         if (on_frame_callback_) {
             on_frame_callback_(frame);
         }
@@ -149,7 +149,7 @@ namespace video {
             ImageFrame frame;
             frame.src_img = std::move(frame_bgr);
             frame.timestamp = clock::now();
-
+            frame.pixel_format = PixelFormat::RGB;
             if (on_frame_callback_) {
                 on_frame_callback_(frame);
             }

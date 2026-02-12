@@ -5,9 +5,17 @@
 #include <yaml-cpp/node/node.h>
 namespace wust_vl {
 namespace video {
+    enum class PixelFormat : uint8_t {
+        UNKNOWN = 0,
+        GRAY = 1,
+        BGR = 2,
+        RGB = 3,
+    };
     struct ImageFrame {
         cv::Mat src_img;
         std::chrono::steady_clock::time_point timestamp;
+        PixelFormat pixel_format = PixelFormat::UNKNOWN;
+        
     };
 
     class ICameraDevice {

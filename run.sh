@@ -65,7 +65,7 @@ cd "$BUILD_DIR"
 cmake -G Ninja ..
 
 echo -e "${yellow}\n<<<--- Ninja Build --->>>${reset}"
-ninja   # 自动满线程
+ninja  
 
 echo -e "${yellow}\n<<<--- Install --->>>${reset}"
 sudo ninja install

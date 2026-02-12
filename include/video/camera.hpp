@@ -13,10 +13,11 @@
 // limitations under the License.
 #pragma once
 #include "hik.hpp"
+#include "uvc.hpp"
 #include "video_player.hpp"
 namespace wust_vl {
 namespace video {
-    enum class CameraType : uint8_t { HIK, VIDEO_PLAYER };
+    enum class CameraType : uint8_t { HIK, VIDEO_PLAYER, UVC };
     inline std::string toUpper(const std::string& s) {
         std::string res = s;
         std::transform(res.begin(), res.end(), res.begin(), [](unsigned char c) {
@@ -30,6 +31,8 @@ namespace video {
             return CameraType::HIK;
         else if (s == "VIDEO_PLAYER")
             return CameraType::VIDEO_PLAYER;
+        else if (s == "UVC")
+            return CameraType::UVC;
         else
             return CameraType::HIK;
     }
@@ -47,6 +50,10 @@ namespace video {
                 case CameraType::VIDEO_PLAYER:
                     device_ = std::make_shared<VideoPlayer>();
                     device_->loadConfig(config["video_player"]);
+                    break;
+                case CameraType::UVC:
+                    device_ = std::make_shared<UVC>();
+                    device_->loadConfig(config["uvc"]);
                     break;
             }
             WUST_INFO("camera") << "init camera success";

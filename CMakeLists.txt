@@ -26,7 +26,8 @@ configure_file(
     ${CMAKE_CURRENT_BINARY_DIR}/VersionConfig.h
 )
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake)
-include_directories(include)
+include_directories(include
+    ${CMAKE_SOURCE_DIR})
 # OpenCV
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
@@ -37,23 +38,33 @@ find_package(HikSDK REQUIRED)
 include_directories(${HikSDK_INCLUDE_DIR})
 if(BUILD_WITH_OPENVINO)
     find_package(OpenVINO REQUIRED COMPONENTS Runtime ONNX)
+    list(APPEND BUILD_DEFINITIONS USE_OPENVINO)
 endif()
 
 if(BUILD_WITH_TRT)
     find_package(CUDAToolkit REQUIRED)
     set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};/home/hy/TensorRT-10.6.0.26")
     find_package(TensorRT REQUIRED)
+    include_directories(${TensorRT_INCLUDE_DIR})
+    set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
+    set(CMAKE_CUDA_ARCHITECTURES 86)
     enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 14)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    set(CMAKE_CUDA_COMPILER_LAUNCHER ccache)
+    add_subdirectory(wust_vl_cuda ${CMAKE_BINARY_DIR}/wust_vl_cuda_build)
+    list(APPEND BUILD_DEFINITIONS USE_TRT)
 endif()
 
 if(BUILD_WITH_NCNN)
     find_package(ncnn REQUIRED)
+    list(APPEND BUILD_DEFINITIONS USE_NCNN)
 endif()
 
 if(BUILD_WITH_ORT)
     set(ort_root_path "/home/hy/onnxruntime-linux-x64-gpu-1.22.0")
     find_package(Ort REQUIRED)
+    list(APPEND BUILD_DEFINITIONS USE_ORT)
 endif()
 
 
@@ -69,6 +80,9 @@ set(
             wust_vl_video
 
     )
+if(BUILD_WITH_TRT)
+    list(APPEND TARGETS_LIST wust_vl_cuda)
+endif()  
 install(
     TARGETS
         ${TARGETS_LIST}

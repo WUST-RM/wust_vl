@@ -13,7 +13,9 @@
 // limitations under the License.
 #include "video/hik.hpp"
 #include <pwd.h>
-
+#ifdef USE_TRT
+    #include "wust_vl_cuda/cvtcolor.hpp"
+#endif
 namespace wust_vl {
 namespace video {
     inline void changeFileOwner(const std::string& filepath, const std::string& username) {
@@ -93,6 +95,9 @@ namespace video {
         use_rgb_ = config["use_rgb"].as<bool>();
         use_ea_ = config["use_ea"].as<bool>();
         use_raw_ = config["use_raw"].as<bool>();
+#ifdef USE_TRT
+        use_cuda_cvt_ = config["use_cuda_cvt"].as<bool>();
+#endif
         WUST_INFO(hik_logger_) << "Camera parameters set successfully!";
 
         return true;
@@ -314,6 +319,7 @@ namespace video {
         WUST_INFO(hik_logger_) << "Camera restarted successfully!";
         return true;
     }
+
     ImageFrame HikCamera::convertToMat(Frame& f, bool use_raw) {
         ImageFrame img_frame;
         img_frame.timestamp = f.timestamp;
@@ -331,18 +337,60 @@ namespace video {
 
         if (use_raw) {
             img_frame.src_img = src.clone();
+
+            if (img_frame.src_img.empty()) {
+                img_frame.pixel_format = PixelFormat::UNKNOWN;
+            } else if (img_frame.src_img.channels() == 3) {
+                img_frame.pixel_format = use_rgb_ ? PixelFormat::RGB : PixelFormat::BGR;
+            } else if (img_frame.src_img.channels() == 1) {
+                if (pixel_type == PixelType_Gvsp_Mono8) {
+                    img_frame.pixel_format = PixelFormat::GRAY;
+                } else {
+        
+                    img_frame.pixel_format = PixelFormat::GRAY;
+                }
+            } else {
+                img_frame.pixel_format = PixelFormat::UNKNOWN;
+            }
+
             MV_CC_FreeImageBuffer(camera_handle_, &f.out_frame);
             return img_frame;
         }
+
         const auto& map_ref = use_rgb_ ? (use_ea_ ? PIXEL_MAP_RGB_EA : PIXEL_MAP_RGB)
                                        : (use_ea_ ? PIXEL_MAP_BGR_EA : PIXEL_MAP_BGR);
 
         int cvt_code = map_ref.at(pixel_type);
+
         if (cvt_code >= 0) {
-            cv::cvtColor(src, img_frame.src_img, cvt_code);
+#ifdef USE_TRT
+            if (use_cuda_cvt_) {
+                static cuda_cvt::CudaBayer cuda_cvt;
+                cuda_cvt.process(src, img_frame.src_img, cvt_code);
+            } else {
+#endif
+                cv::cvtColor(src, img_frame.src_img, cvt_code);
+#ifdef USE_TRT
+            }
+#endif
         } else {
             img_frame.src_img = src.clone();
         }
+
+        if (img_frame.src_img.empty()) {
+            img_frame.pixel_format = PixelFormat::UNKNOWN;
+        } else if (img_frame.src_img.channels() == 3) {
+            img_frame.pixel_format = use_rgb_ ? PixelFormat::RGB : PixelFormat::BGR;
+        } else if (img_frame.src_img.channels() == 1) {
+            if (pixel_type == PixelType_Gvsp_Mono8) {
+                img_frame.pixel_format = PixelFormat::GRAY;
+            } else {
+                img_frame.pixel_format = PixelFormat::GRAY;
+            }
+        } else {
+            img_frame.pixel_format = PixelFormat::UNKNOWN;
+        }
+
         MV_CC_FreeImageBuffer(camera_handle_, &f.out_frame);
         return img_frame;
     }

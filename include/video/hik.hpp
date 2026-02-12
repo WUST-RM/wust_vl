@@ -86,7 +86,8 @@ namespace video {
                 return;
             }
 
-            int64_t c = std::clamp(val, static_cast<int64_t>(iv.nMin), static_cast<int64_t>(iv.nMax));
+            int64_t c =
+                std::clamp(val, static_cast<int64_t>(iv.nMin), static_cast<int64_t>(iv.nMax));
             int r = MV_CC_SetIntValue(camera_handle, param, c);
             if (r == MV_OK) {
                 WUST_INFO("hik_camera") << param << " set to " << c;
@@ -172,6 +173,7 @@ namespace video {
         bool use_rgb_ = false;
         bool use_ea_ = false;
         bool use_raw_ = false;
+        bool use_cuda_cvt_ = false;
         void* camera_handle_;
         int fail_count_;
         wust_vl::common::concurrency::MonitoredThread::Ptr capture_thread_;
