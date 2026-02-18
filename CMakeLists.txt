@@ -72,8 +72,31 @@ add_subdirectory(src/ml_net)
 add_subdirectory(src/common)
 add_subdirectory(src/algorithm)
 add_subdirectory(src/video)
+add_library(wust_vl INTERFACE)
+
+target_link_libraries(wust_vl
+    INTERFACE
+        wust_vl_ml_net
+        wust_vl_common
+        wust_vl_algorithm
+        wust_vl_video
+)
+
+if(BUILD_WITH_TRT)
+    target_link_libraries(wust_vl INTERFACE wust_vl_cuda)
+endif()
+
+target_include_directories(wust_vl
+    INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+        $<INSTALL_INTERFACE:include>
+)
+
+add_library(wust_vl::wust_vl ALIAS wust_vl)
 set(
         TARGETS_LIST
+            wust_vl
             wust_vl_ml_net
             wust_vl_common
             wust_vl_algorithm
@@ -83,6 +106,7 @@ set(
 if(BUILD_WITH_TRT)
     list(APPEND TARGETS_LIST wust_vl_cuda)
 endif()  
+
 install(
     TARGETS
         ${TARGETS_LIST}
