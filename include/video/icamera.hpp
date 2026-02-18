@@ -15,7 +15,6 @@ namespace video {
         cv::Mat src_img;
         std::chrono::steady_clock::time_point timestamp;
         PixelFormat pixel_format = PixelFormat::UNKNOWN;
-        
     };
 
     class ICameraDevice {

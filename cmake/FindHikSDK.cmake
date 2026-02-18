@@ -95,23 +95,30 @@ endif()
 # 5. 创建导入库目标
 # =========================
 if(HikSDK_LIB AND HikSDK_INCLUDE_DIR)
-  if(NOT TARGET hiksdk)
-    add_library(hiksdk SHARED IMPORTED GLOBAL)
+
+  if(NOT TARGET HikSDK::HikSDK)
+
+    add_library(HikSDK::HikSDK SHARED IMPORTED GLOBAL)
 
     if(WIN32)
-      set_target_properties(hiksdk PROPERTIES
+      set_target_properties(HikSDK::HikSDK PROPERTIES
         IMPORTED_IMPLIB "${HikSDK_LIB}"
         IMPORTED_LOCATION "${HikSDK_DLL}"
         INTERFACE_INCLUDE_DIRECTORIES "${HikSDK_INCLUDE_DIR}"
       )
     else()
-      set_target_properties(hiksdk PROPERTIES
+      set_target_properties(HikSDK::HikSDK PROPERTIES
         IMPORTED_LOCATION "${HikSDK_LIB}"
         INTERFACE_INCLUDE_DIRECTORIES "${HikSDK_INCLUDE_DIR}"
       )
     endif()
+
   endif()
+
 endif()
+set(HikSDK_LIBS HikSDK::HikSDK)
+set(HikSDK_INCLUDE_DIRS ${HikSDK_INCLUDE_DIR})
+
 
 # =========================
 # 6. 标准 find_package 处理

@@ -11,6 +11,9 @@ target_sources(
 target_include_directories(wust_vl_common PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include/wust_vl>
-    ${OpenCV_INCLUDE_DIRS}
-    ${EIGEN3_INCLUDE_DIRS}
+    
+)
+target_link_libraries(wust_vl_common
+        ${OpenCV_LIBS}  
+        Eigen3::Eigen
 )

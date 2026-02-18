@@ -1,5 +1,4 @@
 add_library(wust_vl_algorithm SHARED)
-include_directories(include)
 target_sources(
     wust_vl_algorithm
         PRIVATE
@@ -8,6 +7,8 @@ target_sources(
 target_include_directories(wust_vl_algorithm PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include/wust_vl>
-    ${OpenCV_INCLUDE_DIRS}
-    ${EIGEN3_INCLUDE_DIRS}
+)
+target_link_libraries(wust_vl_algorithm 
+    ${OpenCV_LIBS}
+    Eigen3::Eigen
 )

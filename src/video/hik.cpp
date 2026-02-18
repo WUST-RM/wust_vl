@@ -346,7 +346,6 @@ namespace video {
                 if (pixel_type == PixelType_Gvsp_Mono8) {
                     img_frame.pixel_format = PixelFormat::GRAY;
                 } else {
-        
                     img_frame.pixel_format = PixelFormat::GRAY;
                 }
             } else {
