@@ -20,5 +20,6 @@ rsync -avz \
     --exclude='.git/' \
     --exclude='bin/' \
     --exclude='build/' \
+    --exclude='CMakeLists.txt' \
     "${WORK_DIR}/" \
     "${REMOTE_USER}@${REMOTE_IP}:${TARGET_PATH}/"

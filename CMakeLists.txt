@@ -43,6 +43,7 @@ if(BUILD_WITH_TRT)
     set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};/home/hy/TensorRT-10.6.0.26")
     find_package(TensorRT REQUIRED)
     include_directories(${TensorRT_INCLUDE_DIR})
+    include_directories(/usr/local/cuda/include)
     set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
     set(CMAKE_CUDA_ARCHITECTURES 86)
     enable_language(CUDA)
@@ -79,6 +80,7 @@ target_link_libraries(wust_vl
         wust_vl_video
         Eigen3::Eigen
         HikSDK::HikSDK
+        
 )
 
 if(BUILD_WITH_TRT)

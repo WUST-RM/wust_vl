@@ -16,7 +16,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
-
+namespace __wust_vl_logger {
 namespace fs = std::filesystem;
 
 enum class LogLevel : uint8_t { DEBUG = 0, INFO, WARN, ERROR, MAIN };
@@ -208,7 +208,9 @@ private:
     int line_;
     bool throwing_ { false };
 };
+} // namespace __wust_vl_logger
 
+namespace wust_vl {
 inline void initLogger(
     const std::string& level,
     const std::string& dir = "./logs",
@@ -216,27 +218,35 @@ inline void initLogger(
     bool file = true,
     bool simplified = false
 ) {
-    auto& log = Logger::getInstance();
+    auto& log = __wust_vl_logger::Logger::getInstance();
     log.setLevel(level);
     log.enableSimplifiedOutput(simplified);
 
     if (!cli)
-        log.setLevel(LogLevel::ERROR);
+        log.setLevel(__wust_vl_logger::LogLevel::ERROR);
 
-    fs::create_directories(dir);
+    __wust_vl_logger::fs::create_directories(dir);
     if (!file)
         return;
 
-    auto name = getTimeStr();
+    auto name = __wust_vl_logger::getTimeStr();
     std::replace(name.begin(), name.end(), ':', '-');
     std::replace(name.begin(), name.end(), ' ', '_');
 
-    log.enableFileOutput((fs::path(dir) / ("log_" + name + ".txt")).string());
+    log.enableFileOutput((__wust_vl_logger::fs::path(dir) / ("log_" + name + ".txt")).string());
 }
+} // namespace wust_vl
 
-#define WUST_MAIN(node) LoggerStream(LogLevel::MAIN, node, __FILE__, __LINE__)
-#define WUST_DEBUG(node) LoggerStream(LogLevel::DEBUG, node, __FILE__, __LINE__)
-#define WUST_INFO(node) LoggerStream(LogLevel::INFO, node, __FILE__, __LINE__)
-#define WUST_WARN(node) LoggerStream(LogLevel::WARN, node, __FILE__, __LINE__)
-#define WUST_ERROR(node) LoggerStream(LogLevel::ERROR, node, __FILE__, __LINE__)
-#define WUST_THROW_ERROR(node) LoggerStream(LogLevel::ERROR, node, __FILE__, __LINE__).throwError()
+#define WUST_MAIN(node) \
+    __wust_vl_logger::LoggerStream(__wust_vl_logger::LogLevel::MAIN, node, __FILE__, __LINE__)
+#define WUST_DEBUG(node) \
+    __wust_vl_logger::LoggerStream(__wust_vl_logger::LogLevel::DEBUG, node, __FILE__, __LINE__)
+#define WUST_INFO(node) \
+    __wust_vl_logger::LoggerStream(__wust_vl_logger::LogLevel::INFO, node, __FILE__, __LINE__)
+#define WUST_WARN(node) \
+    __wust_vl_logger::LoggerStream(__wust_vl_logger::LogLevel::WARN, node, __FILE__, __LINE__)
+#define WUST_ERROR(node) \
+    __wust_vl_logger::LoggerStream(__wust_vl_logger::LogLevel::ERROR, node, __FILE__, __LINE__)
+#define WUST_THROW_ERROR(node) \
+    __wust_vl_logger::LoggerStream(__wust_vl_logger::LogLevel::ERROR, node, __FILE__, __LINE__) \
+        .throwError()

@@ -135,13 +135,18 @@ struct TensorRTNet::Impl {
                 static_cast<int>(nvinfer1::ILogger::Severity::kWARNING)
             ))
         {
+            std::cerr << "Failed to parse ONNX: " << onnx_path << '\n';
             throw std::runtime_error("Failed to parse ONNX: " + onnx_path);
         }
 
         auto config = std::unique_ptr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
 
-        if (builder->platformHasFastFp16())
+        if (builder->platformHasFastFp16()) {
+            std::cout << "[TensorRT] FP16 supported, enabling.\n";
             config->setFlag(nvinfer1::BuilderFlag::kFP16);
+        } else {
+            std::cout << "[TensorRT] FP16 not supported, using FP32.\n";
+        }
 
         auto serialized = std::unique_ptr<nvinfer1::IHostMemory>(
             builder->buildSerializedNetwork(*network, *config)

@@ -15,6 +15,29 @@ namespace video {
         cv::Mat src_img;
         std::chrono::steady_clock::time_point timestamp;
         PixelFormat pixel_format = PixelFormat::UNKNOWN;
+        ImageFrame() = default;
+
+        // 2) 拷贝构造
+        ImageFrame(const ImageFrame& other) noexcept:
+            src_img(other.src_img),
+            timestamp(other.timestamp),
+            pixel_format(other.pixel_format) {}
+        ImageFrame& operator=(const ImageFrame& other) noexcept {
+            if (this != &other) {
+                src_img = other.src_img;
+                timestamp = other.timestamp;
+                pixel_format = other.pixel_format;
+            }
+            return *this;
+        }
+        ImageFrame& operator=(ImageFrame&& other) noexcept {
+            if (this != &other) {
+                src_img = std::move(other.src_img);
+                timestamp = other.timestamp;
+                pixel_format = other.pixel_format;
+            }
+            return *this;
+        }
     };
 
     class ICameraDevice {
