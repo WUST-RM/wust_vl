@@ -5,9 +5,11 @@
 
 namespace wust_vl {
 namespace video {
-
+    UVC::~UVC() {
+        stop();
+    }
     bool UVC::loadConfig(const YAML::Node& config) {
-        WUST_INFO("UVC") << "try get device_name by ls -l /dev/v4l/by-id/";
+        WUST_INFO("UVC") << "try get device_name by ls -l /dev/v4l/by-id/  ls -l /dev/v4l/by-path/";
         try {
             device_name_ = config["device_name"].as<std::string>();
 
@@ -38,7 +40,28 @@ namespace video {
     void UVC::setFrameCallback(FrameCallback cb) {
         on_frame_callback_ = std::move(cb);
     }
+    bool setAndCheck(
+        cv::VideoCapture& cap,
+        int prop,
+        double value,
+        const std::string& name,
+        double tol = 1e-3
+    ) {
+        if (!cap.set(prop, value)) {
+            WUST_WARN("UVC") << name << " set() failed";
+            return false;
+        }
 
+        double actual = cap.get(prop);
+
+        if (std::abs(actual - value) > tol) {
+            WUST_WARN("UVC") << name << " mismatch. requested=" << value << " actual=" << actual;
+            return false;
+        }
+
+        WUST_INFO("UVC") << name << " OK = " << actual;
+        return true;
+    }
     void UVC::start() {
         if (running_) {
             WUST_WARN("UVC") << "Camera already running.";
@@ -47,20 +70,25 @@ namespace video {
 
         WUST_INFO("UVC") << "Starting camera: " << device_name_;
 
-        if (!cap_.open(device_name_)) {
+        if (!cap_.open(device_name_, cv::CAP_V4L2)) {
             WUST_ERROR("UVC") << "Failed to open camera.";
             return;
         }
-        double mode = cap_.get(cv::CAP_PROP_AUTO_EXPOSURE);
-        WUST_DEBUG("UVC") << "auto exposure mode = " << mode;
-        cap_.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+        
+        setAndCheck(cap_, cv::CAP_PROP_AUTO_EXPOSURE, 1, "AUTO_EXPOSURE");
+        setAndCheck(
+            cap_,
+            cv::CAP_PROP_FOURCC,
+            cv::VideoWriter::fourcc('M', 'J', 'P', 'G'),
+            "FOURCC"
+        );
 
-        cap_.set(cv::CAP_PROP_FRAME_WIDTH, width_);
-        cap_.set(cv::CAP_PROP_FRAME_HEIGHT, height_);
-        cap_.set(cv::CAP_PROP_EXPOSURE, exposure_);
-        cap_.set(cv::CAP_PROP_GAIN, gain_);
-        cap_.set(cv::CAP_PROP_GAMMA, gamma_);
-        cap_.set(cv::CAP_PROP_FPS, fps_);
+        setAndCheck(cap_, cv::CAP_PROP_FRAME_WIDTH, width_, "WIDTH");
+        setAndCheck(cap_, cv::CAP_PROP_FRAME_HEIGHT, height_, "HEIGHT");
+        setAndCheck(cap_, cv::CAP_PROP_EXPOSURE, exposure_, "EXPOSURE");
+        setAndCheck(cap_, cv::CAP_PROP_GAIN, gain_, "GAIN");
+        setAndCheck(cap_, cv::CAP_PROP_GAMMA, gamma_, "GAMMA");
+        setAndCheck(cap_, cv::CAP_PROP_FPS, fps_, "FPS");
 
         running_ = true;
 

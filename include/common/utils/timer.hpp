@@ -16,7 +16,9 @@ namespace common {
         public:
             using Callback = std::function<void(double)>;
 
-            Timer() = default;
+            Timer(std::string n) {
+                name_ = std::move(n);
+            }
             ~Timer() {
                 stop();
             }
@@ -28,7 +30,7 @@ namespace common {
                 callback_ = std::move(callback);
 
                 thread_ = wust_vl::common::concurrency::MonitoredThread::create(
-                    "TimerThread",
+                    name_,
                     [this](wust_vl::common::concurrency::MonitoredThread::Ptr self) {
                         using clock = std::chrono::steady_clock;
 
@@ -87,6 +89,7 @@ namespace common {
             std::chrono::microseconds interval_;
             Callback callback_;
             wust_vl::common::concurrency::MonitoredThread::Ptr thread_;
+            std::string name_;
             bool running_ = false;
         };
 

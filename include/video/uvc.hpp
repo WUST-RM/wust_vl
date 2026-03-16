@@ -11,6 +11,7 @@ namespace wust_vl {
 namespace video {
     class UVC: public ICameraDevice {
     public:
+        ~UVC();
         bool loadConfig(const YAML::Node& config) override;
 
         void setFrameCallback(FrameCallback cb) override;
