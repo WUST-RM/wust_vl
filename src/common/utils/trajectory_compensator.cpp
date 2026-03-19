@@ -22,33 +22,52 @@ namespace common {
             double& pitch,
             const double bullet_speed
         ) const noexcept {
-            double target_height = target_position(2);
-            // The iterative_height is used to calculate angle in each iteration
-            double iterative_height = target_height;
-            double impact_height = 0;
-            double distance = std::sqrt(
+            const double target_height = target_position(2);
+
+            const double distance = std::sqrt(
                 target_position(0) * target_position(0) + target_position(1) * target_position(1)
             );
-            double angle = std::atan2(target_height, distance);
-            double dh = 0;
-            // Iterate to find the right angle, which makes the impact height equal to the
-            // target height
-            for (int i = 0; i < iteration_times_; ++i) {
-                angle = std::atan2(iterative_height, distance);
-                if (std::abs(angle) > M_PI / 2.5) {
-                    break;
-                }
-                impact_height = calculateTrajectory(distance, angle, bullet_speed);
-                dh = target_height - impact_height;
-                if (std::abs(dh) < 0.01) {
-                    break;
-                }
-                iterative_height += dh;
-            }
-            if (std::abs(dh) > 0.01 || std::abs(angle) > M_PI / 2.5) {
+
+            if (distance < 1e-6 || bullet_speed < 1e-3) {
                 return false;
             }
-            pitch = angle;
+
+            auto f = [&](double angle) {
+                double y = calculateTrajectory(distance, angle, bullet_speed);
+                return y - target_height;
+            };
+
+            double left = -M_PI / 4.0; // -45°
+            double right = M_PI / 3.0; // 60°
+
+            double f_left = f(left);
+            double f_right = f(right);
+
+            if (f_left * f_right > 0) {
+                return false;
+            }
+
+            double mid = 0;
+            double f_mid = 0;
+
+            for (int i = 0; i < iteration_times_; ++i) {
+                mid = 0.5 * (left + right);
+                f_mid = f(mid);
+
+                if (std::abs(f_mid) < 0.01) {
+                    pitch = mid;
+                    return true;
+                }
+
+                if (f_left * f_mid < 0) {
+                    right = mid;
+                    f_right = f_mid;
+                } else {
+                    left = mid;
+                    f_left = f_mid;
+                }
+            }
+            pitch = mid;
             return true;
         }
 
